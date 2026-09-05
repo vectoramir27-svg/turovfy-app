@@ -5,7 +5,7 @@ import re
 import asyncio
 from fastapi import FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
@@ -64,47 +64,43 @@ async def resolve_audio_url(video_id: str) -> str:
     if video_id in STREAM_CACHE:
         return STREAM_CACHE[video_id]
 
-    # Список API для получения аудиопотока
-    piped_and_invidious = [
-        ("piped", "https://pipedapi.kavin.rocks"),
-        ("piped", "https://api.piped.privacydev.net"),
-        ("invidious", "https://inv.nadeko.net"),
-        ("invidious", "https://invidious.perennialte.ch"),
-        ("invidious", "https://vid.priv.au"),
+    gateways = [
+        f"https://pipedapi.kavin.rocks/streams/{video_id}",
+        f"https://api.piped.privacydev.net/streams/{video_id}",
+        f"https://inv.nadeko.net/api/v1/videos/{video_id}",
+        f"https://vid.priv.au/api/v1/videos/{video_id}"
     ]
-    
-    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-        for api_type, base_url in piped_and_invidious:
+
+    async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
+        for url in gateways:
             try:
-                if api_type == "piped":
-                    res = await client.get(f"{base_url}/streams/{video_id}")
-                    if res.status_code == 200:
-                        data = res.json()
-                        audio_streams = data.get("audioStreams", [])
+                res = await client.get(url)
+                if res.status_code == 200:
+                    data = res.json()
+                    # Piped format
+                    if "audioStreams" in data and data["audioStreams"]:
+                        streams = data["audioStreams"]
+                        streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                        target = streams[0].get("url")
+                        if target:
+                            STREAM_CACHE[video_id] = target
+                            return target
+                    # Invidious format
+                    if "adaptiveFormats" in data:
+                        audio_streams = [f for f in data["adaptiveFormats"] if "audio" in f.get("type", "")]
                         if audio_streams:
                             audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                            url = audio_streams[0].get("url")
-                            if url:
-                                STREAM_CACHE[video_id] = url
-                                return url
-                else:
-                    res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
-                    if res.status_code == 200:
-                        data = res.json()
-                        formats = data.get("adaptiveFormats", [])
-                        audio_streams = [f for f in formats if "audio" in f.get("type", "")]
-                        if audio_streams:
-                            audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                            url = audio_streams[0].get("url")
-                            if url:
-                                STREAM_CACHE[video_id] = url
-                                return url
+                            target = audio_streams[0].get("url")
+                            if target:
+                                STREAM_CACHE[video_id] = target
+                                return target
             except Exception:
                 continue
 
-    fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
-    STREAM_CACHE[video_id] = fallback_url
-    return fallback_url
+    # Прямой публичный fallback-прокси
+    fallback = f"https://invidious.jing.rocks/latest_version?id={video_id}&itag=140"
+    STREAM_CACHE[video_id] = fallback
+    return fallback
 
 @app.get("/")
 async def serve_index():
@@ -287,47 +283,13 @@ async def get_track_lyrics(track: str, artist: str):
 
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str, request: Request):
-    target_url = await resolve_audio_url(video_id)
-    
-    req_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    range_header = request.headers.get("range")
-    if range_header:
-        req_headers["range"] = range_header
-
-    client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
     try:
-        req = client.build_request("GET", target_url, headers=req_headers)
-        upstream_resp = await client.send(req, stream=True)
+        target_url = await resolve_audio_url(video_id)
+        # Отдаём прямой 307-редирект браузеру телефона.
+        # Браузер скачивает поток напрямую с CDN, снимая нагрузку и обходя баны дата-центра Render.
+        return RedirectResponse(url=target_url, status_code=307)
     except Exception as e:
-        await client.aclose()
-        raise HTTPException(status_code=502, detail=f"Upstream fetch failed: {e}")
-
-    async def stream_generator():
-        try:
-            async for chunk in upstream_resp.aiter_bytes(chunk_size=65536):
-                yield chunk
-        finally:
-            await upstream_resp.aclose()
-            await client.aclose()
-
-    res_headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Type": upstream_resp.headers.get("content-type", "audio/mp4"),
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-    }
-    if "content-range" in upstream_resp.headers:
-        res_headers["Content-Range"] = upstream_resp.headers["content-range"]
-    if "content-length" in upstream_resp.headers:
-        res_headers["Content-Length"] = upstream_resp.headers["content-length"]
-
-    return StreamingResponse(
-        stream_generator(),
-        status_code=upstream_resp.status_code,
-        headers=res_headers
-    )
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):

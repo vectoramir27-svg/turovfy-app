@@ -2,11 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#050507">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>TurovFy — Unified Streaming Engine</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
 
   <style>
     :root {
@@ -1549,7 +1546,7 @@
         height: 18px;
       }
 
-      /* --- МОБИЛЬНЫЙ ФОРМАТ КАРАОКЕ (ПЛЕЕР РАСШИРЕННЫЙ И ЗАКРУГЛЕННЫЙ) --- */
+      /* --- КАСТОМНЫЙ МОБИЛЬНЫЙ ПЛЕЕР С ЗАСКРУГЛЕННЫМ БЛОКОМ ПОД ВИДЕО --- */
       .karaoke-overlay {
         padding: 0;
         background: #181512;
@@ -1569,7 +1566,7 @@
       .karaoke-right {
         flex: 1;
         height: auto;
-        padding: 60px 20px 140px 20px;
+        padding: 60px 24px 140px 24px;
         gap: 22px;
       }
       .k-line {
@@ -1578,22 +1575,21 @@
         font-weight: 800;
       }
 
-      /* Красивый расширенный скругленный плеер снизу под текстом */
       .mobile-lyrics-player-bar {
         display: flex;
         flex-direction: column;
         position: absolute;
-        bottom: 20px;
+        bottom: 16px;
         left: 16px;
         right: 16px;
         width: auto;
-        padding: 16px 20px;
-        background: rgba(24, 21, 18, 0.94);
+        padding: 16px 18px;
+        background: rgba(26, 24, 21, 0.92);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 24px;
-        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
         gap: 12px;
         z-index: 10;
       }
@@ -1725,22 +1721,18 @@
       <div class="island-tabs-group" id="islandTabsGroup">
         <div class="liquid-pill-indicator" id="liquidIndicator"></div>
 
-        <!-- 1. Главная (Home) -->
         <button class="island-btn active" id="iNavCatalog" onclick="goToHome()" title="Главная">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </button>
 
-        <!-- 2. Плейлисты / Медиатека (Music) -->
         <button class="island-btn" id="iNavPlaylists" onclick="switchTab('playlists')" title="Плейлисты">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </button>
 
-        <!-- 3. Эквалайзер (Sliders) -->
         <button class="island-btn" id="iNavEq" onclick="switchTab('eq')" title="Эквалайзер">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/></svg>
         </button>
 
-        <!-- 4. Профиль (User) -->
         <button class="island-btn" id="iNavProfile" onclick="switchTab('profile')" title="Профиль">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </button>
@@ -1748,7 +1740,6 @@
 
       <div class="island-sep"></div>
 
-      <!-- 5. Текст / Караоке (Микрофон) -->
       <button class="island-special-btn" onclick="toggleKaraoke()" title="Текст песни">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
       </button>
@@ -1944,7 +1935,6 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </button>
 
-      <!-- Кнопка Текст -->
       <button class="lyrics-btn" id="lyricsBtn" onclick="toggleKaraoke()" title="Текст песни">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
       </button>
@@ -2015,7 +2005,6 @@
     </button>
 
     <div class="karaoke-container">
-      <!-- Десктопная обложка -->
       <div class="karaoke-left">
         <div class="karaoke-cover-box" id="kCoverBox">
           <img id="kCover" class="karaoke-cover" referrerpolicy="no-referrer" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' fill='%2318181b'/%3E">
@@ -2057,12 +2046,10 @@
         </div>
       </div>
 
-      <!-- Скролл текста караоке -->
       <div class="karaoke-right" id="karaokeLinesContainer">
         <div class="k-line active">Загрузка текста...</div>
       </div>
 
-      <!-- Мобильный плеер снизу экрана текста -->
       <div class="mobile-lyrics-player-bar">
         <div class="m-lyrics-track-row">
           <div class="m-lyrics-meta">
@@ -2119,16 +2106,15 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <audio id="audioElement"></audio>
+  <!-- СКРЫТЫЙ КОНТЕЙНЕР НАСТОЯЩЕГО ПЛЕЕРА YOUTUBE -->
+  <div style="position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
+    <div id="yt-audio-player-host"></div>
+  </div>
 
   <script>
-    // БАЗОВЫЙ АДРЕС ТВОЕГО БЭКЕНДА НА RENDER
-    const API_BASE = "https://turovfy-app.onrender.com";
-
     const GOOGLE_CLIENT_ID = "626469255866-clqnscvcv71s9baj7rs32u49ekmmertk.apps.googleusercontent.com";
     const DEFAULT_CATALOG_QUERY = 'Phonk 2026';
 
-    const audio = document.getElementById('audioElement');
     const searchInput = document.getElementById('searchInput');
     const trackGrid = document.getElementById('trackGrid');
     const playBtn = document.getElementById('playBtn');
@@ -2192,10 +2178,81 @@
     let currentPreset = 'flat';
     let syncDebounce = null;
     let lastVolume = 1.0;
+    let currentVolumeLevel = 1.0;
 
     let currentLyricsData = [];
     let isKaraokeOpen = false;
     let selectedTrackForPlaylist = null;
+
+    /* --- ИНИЦИАЛИЗАЦИЯ ДВИЖКА YOUTUBE IFRAME --- */
+    let ytPlayer = null;
+    let isYtReady = false;
+    let tickerInterval = null;
+
+    window.onYouTubeIframeAPIReady = function() {
+      ytPlayer = new YT.Player('yt-audio-player-host', {
+        height: '1',
+        width: '1',
+        playerVars: {
+          'playsinline': 1,
+          'controls': 0,
+          'disablekb': 1,
+          'fs': 0,
+          'rel': 0,
+          'origin': window.location.origin
+        },
+        events: {
+          'onReady': () => {
+            isYtReady = true;
+            ytPlayer.setVolume(Math.round(currentVolumeLevel * 100));
+          },
+          'onStateChange': (e) => {
+            if (e.data === YT.PlayerState.PLAYING) {
+              setPlayState(true);
+            } else if (e.data === YT.PlayerState.PAUSED) {
+              setPlayState(false);
+            } else if (e.data === YT.PlayerState.ENDED) {
+              nextTrack();
+            }
+          }
+        }
+      });
+    };
+
+    function startProgressTicker() {
+      if (tickerInterval) clearInterval(tickerInterval);
+      tickerInterval = setInterval(() => {
+        if (!isYtReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+        
+        const cur = ytPlayer.getCurrentTime() || 0;
+        const dur = ytPlayer.getDuration() || 0;
+        if (dur > 0) {
+          const percent = (cur / dur) * 100;
+          updateProgressVisual(percent);
+
+          const formattedCur = formatTime(cur);
+          const formattedDur = formatTime(dur);
+
+          document.getElementById('currentTime').innerText = formattedCur;
+          document.getElementById('duration').innerText = formattedDur;
+
+          if (fsCurrentTime) fsCurrentTime.innerText = formattedCur;
+          if (fsDuration) fsDuration.innerText = formattedDur;
+
+          if (kCurrentTime) kCurrentTime.innerText = formattedCur;
+          if (kDuration) kDuration.innerText = formattedDur;
+
+          if (mKCurrentTime) mKCurrentTime.innerText = formattedCur;
+          if (mKDuration) mKDuration.innerText = formattedDur;
+
+          updateKaraokeHighlight(cur);
+
+          if (Math.floor(cur) % 5 === 0) {
+            queueDatabaseSync();
+          }
+        }
+      }, 350);
+    }
 
     function showToast(text) {
       clearTimeout(toastTimeout);
@@ -2250,13 +2307,15 @@
     }
 
     function toggleMute() {
-      if (audio.volume > 0) {
-        lastVolume = audio.volume;
-        audio.volume = 0;
+      if (currentVolumeLevel > 0) {
+        lastVolume = currentVolumeLevel;
+        currentVolumeLevel = 0;
+        if (isYtReady && ytPlayer) ytPlayer.setVolume(0);
         updateVolumeVisual(0);
       } else {
-        audio.volume = lastVolume || 1.0;
-        updateVolumeVisual(audio.volume);
+        currentVolumeLevel = lastVolume || 1.0;
+        if (isYtReady && ytPlayer) ytPlayer.setVolume(Math.round(currentVolumeLevel * 100));
+        updateVolumeVisual(currentVolumeLevel);
       }
       queueDatabaseSync();
     }
@@ -2298,7 +2357,7 @@
       karaokeLinesContainer.innerHTML = `<div class="k-line active">Загрузка текста...</div>`;
 
       try {
-        const res = await fetch(`${API_BASE}/api/lyrics?track=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
+        const res = await fetch(`/api/lyrics?track=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
         const data = await res.json();
         parseLyrics(data.lyrics, data.type);
       } catch (e) {
@@ -2393,19 +2452,20 @@
       if (!currentUser) return;
       clearTimeout(syncDebounce);
       syncDebounce = setTimeout(async () => {
+        const curTime = (isYtReady && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') ? ytPlayer.getCurrentTime() : 0;
         const payload = {
           email: currentUser.email,
           playlists: userPlaylists,
           state: {
             currentTrack: currentQueue[currentIndex] || null,
-            currentTime: audio.currentTime || 0,
-            volume: audio.volume,
+            currentTime: curTime || 0,
+            volume: currentVolumeLevel,
             eqBands: currentEqBands,
             activePreset: currentPreset
           }
         };
         try {
-          await fetch(`${API_BASE}/api/user/sync`, {
+          await fetch('/api/user/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -2416,41 +2476,15 @@
       }, 500);
     }
 
-    let audioCtx = null;
-    let eqFilters = [];
-    const EQ_FREQUENCIES = [60, 250, 1000, 4000, 12000];
-
-    function setupEqualizer() {
-      if (audioCtx) return;
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioCtx.createMediaElementSource(audio);
-
-      let prevNode = source;
-      eqFilters = EQ_FREQUENCIES.map((freq, i) => {
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'peaking';
-        filter.frequency.value = freq;
-        filter.Q.value = 1.0;
-        filter.gain.value = currentEqBands[i] || 0;
-        prevNode.connect(filter);
-        prevNode = filter;
-        return filter;
-      });
-
-      prevNode.connect(audioCtx.destination);
-    }
+    /* Эквалайзер сохранен для совместимости */
+    function setupEqualizer() {}
 
     function changeEqBand(index, gain) {
-      if (!audioCtx) setupEqualizer();
-      if (eqFilters[index]) {
-        eqFilters[index].gain.value = gain;
-        currentEqBands[index] = Number(gain);
-        document.getElementById(`eqVal${index}`).innerText = `${gain > 0 ? '+' : ''}${gain} dB`;
-        
-        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-        currentPreset = 'custom';
-        queueDatabaseSync();
-      }
+      currentEqBands[index] = Number(gain);
+      document.getElementById(`eqVal${index}`).innerText = `${gain > 0 ? '+' : ''}${gain} dB`;
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      currentPreset = 'custom';
+      queueDatabaseSync();
     }
 
     function applyPreset(preset) {
@@ -2465,9 +2499,7 @@
       const sliders = document.querySelectorAll('.eq-slider');
 
       values.forEach((val, i) => {
-        sliders[i].value = val;
-        if (!audioCtx) setupEqualizer();
-        if (eqFilters[i]) eqFilters[i].gain.value = val;
+        if (sliders[i]) sliders[i].value = val;
         currentEqBands[i] = val;
         document.getElementById(`eqVal${i}`).innerText = `${val > 0 ? '+' : ''}${val} dB`;
       });
@@ -2491,7 +2523,7 @@
       showToast(`Загрузка артиста ${cleanName}...`);
 
       try {
-        const res = await fetch(`${API_BASE}/api/artist?query=${encodeURIComponent(cleanName)}`);
+        const res = await fetch(`/api/artist?query=${encodeURIComponent(cleanName)}`);
         const data = await res.json();
         
         artistNameTitle.innerText = data.name;
@@ -2559,7 +2591,6 @@
         document.getElementById('tabEq').classList.add('active');
         document.getElementById('tabNavEq')?.classList.add('active');
         activeBtn = document.getElementById('iNavEq');
-        if (!audioCtx) setupEqualizer();
       } else if (tab === 'profile') {
         document.getElementById('tabProfile').classList.add('active');
         document.getElementById('tabNavProfile')?.classList.add('active');
@@ -2821,7 +2852,7 @@
       closeAuthModal();
 
       try {
-        const res = await fetch(`${API_BASE}/api/user/auth`, {
+        const res = await fetch('/api/user/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(currentUser)
@@ -2852,7 +2883,7 @@
         applyUserState(currentUser);
 
         try {
-          const res = await fetch(`${API_BASE}/api/user/auth`, {
+          const res = await fetch('/api/user/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(currentUser)
@@ -2870,7 +2901,8 @@
       if (!state) return;
 
       if (state.volume !== undefined) {
-        audio.volume = state.volume;
+        currentVolumeLevel = state.volume;
+        if (isYtReady && ytPlayer) ytPlayer.setVolume(Math.round(currentVolumeLevel * 100));
         updateVolumeVisual(state.volume);
       } else {
         updateVolumeVisual(1.0);
@@ -2902,20 +2934,9 @@
         syncTrackToUI(track);
         loadLyricsForCurrentTrack(track);
 
-        audio.src = `${API_BASE}/api/listen/${track.id}`;
-
-        const onInitialLoad = () => {
-          if (state.currentTime) {
-            audio.currentTime = state.currentTime;
-            const pct = (state.currentTime / (audio.duration || 1)) * 100;
-            updateProgressVisual(pct);
-            document.getElementById('currentTime').innerText = formatTime(state.currentTime);
-            if (fsCurrentTime) fsCurrentTime.innerText = formatTime(state.currentTime);
-            if (kCurrentTime) kCurrentTime.innerText = formatTime(state.currentTime);
-          }
-          audio.removeEventListener('loadedmetadata', onInitialLoad);
-        };
-        audio.addEventListener('loadedmetadata', onInitialLoad);
+        if (isYtReady && ytPlayer) {
+          ytPlayer.cueVideoById(track.id, state.currentTime || 0);
+        }
       }
     }
 
@@ -2954,7 +2975,7 @@
 
     async function executeSearch(query) {
       try {
-        const res = await fetch(`${API_BASE}/api/search?query=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
         const data = await res.json();
         currentQueue = data.results;
         renderGrid(currentQueue);
@@ -2999,38 +3020,41 @@
       syncTrackToUI(track);
       loadLyricsForCurrentTrack(track);
 
-      if (!audioCtx) setupEqualizer();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-
-      audio.currentTime = 0;
       updateProgressVisual(0);
       document.getElementById('currentTime').innerText = '0:00';
       if (fsCurrentTime) fsCurrentTime.innerText = '0:00';
       if (kCurrentTime) kCurrentTime.innerText = '0:00';
       if (mKCurrentTime) mKCurrentTime.innerText = '0:00';
 
-      audio.src = `${API_BASE}/api/listen/${track.id}`;
-      audio.play();
-      setPlayState(true);
-
-      queueDatabaseSync();
-
-      if (currentIndex + 1 < currentQueue.length) {
-        fetch(`${API_BASE}/api/prefetch/${currentQueue[currentIndex + 1].id}`);
+      if (isYtReady && ytPlayer) {
+        ytPlayer.loadVideoById(track.id);
+        ytPlayer.playVideo();
+        startProgressTicker();
+      } else {
+        const checkReady = setInterval(() => {
+          if (isYtReady && ytPlayer) {
+            clearInterval(checkReady);
+            ytPlayer.loadVideoById(track.id);
+            ytPlayer.playVideo();
+            startProgressTicker();
+          }
+        }, 100);
       }
+
+      setPlayState(true);
+      queueDatabaseSync();
     }
 
     function togglePlay() {
-      if (!audio.src) return;
-      if (!audioCtx) setupEqualizer();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (!isYtReady || !ytPlayer || currentIndex < 0) return;
 
-      if (audio.paused) {
-        audio.play();
-        setPlayState(true);
-      } else {
-        audio.pause();
+      const state = ytPlayer.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        ytPlayer.pauseVideo();
         setPlayState(false);
+      } else {
+        ytPlayer.playVideo();
+        setPlayState(true);
       }
     }
 
@@ -3071,79 +3095,29 @@
       if (currentIndex - 1 >= 0) playIndex(currentIndex - 1);
     }
 
-    audio.ontimeupdate = () => {
-      if (!audio.duration) return;
-      const percent = (audio.currentTime / audio.duration) * 100;
-      updateProgressVisual(percent);
-
-      const formattedCur = formatTime(audio.currentTime);
-      const formattedDur = formatTime(audio.duration);
-
-      document.getElementById('currentTime').innerText = formattedCur;
-      document.getElementById('duration').innerText = formattedDur;
-
-      if (fsCurrentTime) fsCurrentTime.innerText = formattedCur;
-      if (fsDuration) fsDuration.innerText = formattedDur;
-
-      if (kCurrentTime) kCurrentTime.innerText = formattedCur;
-      if (kDuration) kDuration.innerText = formattedDur;
-
-      if (mKCurrentTime) mKCurrentTime.innerText = formattedCur;
-      if (mKDuration) mKDuration.innerText = formattedDur;
-
-      updateKaraokeHighlight(audio.currentTime);
-      
-      if (Math.floor(audio.currentTime) % 5 === 0) {
+    function seekToPercentage(val) {
+      if (!isYtReady || !ytPlayer || typeof ytPlayer.getDuration !== 'function') return;
+      const dur = ytPlayer.getDuration() || 0;
+      if (dur > 0) {
+        const targetSec = (val / 100) * dur;
+        ytPlayer.seekTo(targetSec, true);
+        updateProgressVisual(val);
         queueDatabaseSync();
       }
-    };
-
-    progressBar.oninput = () => {
-      if (!audio.duration) return;
-      const val = progressBar.value;
-      audio.currentTime = (val / 100) * audio.duration;
-      updateProgressVisual(val);
-      queueDatabaseSync();
-    };
-
-    if (fsProgressBar) {
-      fsProgressBar.oninput = () => {
-        if (!audio.duration) return;
-        const val = fsProgressBar.value;
-        audio.currentTime = (val / 100) * audio.duration;
-        updateProgressVisual(val);
-        queueDatabaseSync();
-      };
     }
 
-    if (kProgressBar) {
-      kProgressBar.oninput = () => {
-        if (!audio.duration) return;
-        const val = kProgressBar.value;
-        audio.currentTime = (val / 100) * audio.duration;
-        updateProgressVisual(val);
-        queueDatabaseSync();
-      };
-    }
-
-    if (mKProgressBar) {
-      mKProgressBar.oninput = () => {
-        if (!audio.duration) return;
-        const val = mKProgressBar.value;
-        audio.currentTime = (val / 100) * audio.duration;
-        updateProgressVisual(val);
-        queueDatabaseSync();
-      };
-    }
+    progressBar.oninput = () => seekToPercentage(progressBar.value);
+    if (fsProgressBar) fsProgressBar.oninput = () => seekToPercentage(fsProgressBar.value);
+    if (kProgressBar) kProgressBar.oninput = () => seekToPercentage(kProgressBar.value);
+    if (mKProgressBar) mKProgressBar.oninput = () => seekToPercentage(mKProgressBar.value);
 
     volumeSlider.oninput = (e) => { 
       const val = parseFloat(e.target.value);
-      audio.volume = val;
+      currentVolumeLevel = val;
+      if (isYtReady && ytPlayer) ytPlayer.setVolume(Math.round(val * 100));
       updateVolumeVisual(val);
       queueDatabaseSync();
     };
-    
-    audio.onended = () => nextThreadNextTrack = () => nextTrack();
 
     function formatTime(secs) {
       const min = Math.floor(secs / 60) || 0;
@@ -3155,7 +3129,7 @@
       executeSearch(DEFAULT_CATALOG_QUERY);
       checkExistingAuth();
       setTimeout(initGoogleAuth, 600);
-      updateVolumeVisual(audio.volume || 1.0);
+      updateVolumeVisual(currentVolumeLevel);
 
       setTimeout(() => {
         const firstBtn = document.getElementById('iNavCatalog');

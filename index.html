@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#050507">
   <title>TurovFy — Unified Streaming Engine</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1545,7 +1549,7 @@
         height: 18px;
       }
 
-      /* --- КАСТОМНЫЙ МОБИЛЬНЫЙ ПЛЕЕР С ЗАСКРУГЛЕННЫМ БЛОКОМ ПОД ВИДЕО --- */
+      /* --- МОБИЛЬНЫЙ ФОРМАТ КАРАОКЕ (ПЛЕЕР РАСШИРЕННЫЙ И ЗАКРУГЛЕННЫЙ) --- */
       .karaoke-overlay {
         padding: 0;
         background: #181512;
@@ -1565,7 +1569,7 @@
       .karaoke-right {
         flex: 1;
         height: auto;
-        padding: 60px 24px 140px 24px;
+        padding: 60px 20px 140px 20px;
         gap: 22px;
       }
       .k-line {
@@ -1574,22 +1578,22 @@
         font-weight: 800;
       }
 
-      /* Аккуратный расширенный и закругленный плеер снизу */
+      /* Красивый расширенный скругленный плеер снизу под текстом */
       .mobile-lyrics-player-bar {
         display: flex;
         flex-direction: column;
         position: absolute;
-        bottom: 16px;
+        bottom: 20px;
         left: 16px;
         right: 16px;
         width: auto;
-        padding: 16px 18px;
-        background: rgba(26, 24, 21, 0.92);
+        padding: 16px 20px;
+        background: rgba(24, 21, 18, 0.94);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 20px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        border-radius: 24px;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7);
         gap: 12px;
         z-index: 10;
       }
@@ -1715,7 +1719,7 @@
     </div>
   </nav>
 
-  <!-- МОБИЛЬНЫЙ ОСТРОВОК НАВИГАЦИИ (С ЖИДКОЙ АНИМАЦИЕЙ) -->
+  <!-- МОБИЛЬНЫЙ ОСТРОВОК НАВИГАЦИИ -->
   <div class="mobile-island-wrapper">
     <nav class="mobile-island-nav">
       <div class="island-tabs-group" id="islandTabsGroup">
@@ -2058,7 +2062,7 @@
         <div class="k-line active">Загрузка текста...</div>
       </div>
 
-      <!-- Мобильный плеер снизу экрана текста -->
+      <!-- Мобильный плеер снизу экрана текста (красивый и закругленный) -->
       <div class="mobile-lyrics-player-bar">
         <div class="m-lyrics-track-row">
           <div class="m-lyrics-meta">

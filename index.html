@@ -19,7 +19,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://www.youtube.com/iframe_api"></script>
 
   <style>
     :root {
@@ -1384,18 +1383,6 @@
       background: rgba(255, 255, 255, 0.15);
     }
 
-    /* СКРЫТЫЙ ПОДЛОЖЕЧНЫЙ ПЛЕЕР: АКТИВНЫЙ РАЗМЕР В DOM, НО НЕВИДИМЫЙ */
-    .yt-bg-wrapper {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100vw;
-      height: 200px;
-      z-index: -999;
-      opacity: 0.0001;
-      pointer-events: none;
-    }
-
     @media (max-width: 768px) {
       body {
         padding-bottom: 170px;
@@ -2093,15 +2080,14 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- КОНТЕЙНЕР ПЛЕЕРА: РАСПОЛОЖЕН В DOM С РЕАЛЬНЫМИ РАЗМЕРАМИ, НО СКРЫТ ПОД САМЫЙ НИЖНИЙ СЛОЙ -->
-  <div class="yt-bg-wrapper">
-    <div id="yt-player-instance"></div>
-  </div>
+  <!-- ЧИСТЫЙ HTML5 АУДИОПЛЕЕР БЕЗ СТОРОННИХ ОКОН И ФРЕЙМОВ -->
+  <audio id="nativeAudioPlayer" preload="auto"></audio>
 
   <script>
     const GOOGLE_CLIENT_ID = "626469255866-clqnscvcv71s9baj7rs32u49ekmmertk.apps.googleusercontent.com";
     const DEFAULT_CATALOG_QUERY = 'Phonk 2026';
 
+    const audioPlayer = document.getElementById('nativeAudioPlayer');
     const searchInput = document.getElementById('searchInput');
     const trackGrid = document.getElementById('trackGrid');
     const playBtn = document.getElementById('playBtn');
@@ -2171,81 +2157,40 @@
     let isKaraokeOpen = false;
     let selectedTrackForPlaylist = null;
 
-    let yt = null;
-    let isYtReady = false;
-    let progressTimer = null;
-    let queuedVideoId = null;
+    // Прямой резолв стрима с мобильного устройства минуя бан сервера Render
+    async function resolveDirectAudioUrl(videoId) {
+      const publicGateways = [
+        `https://api.piped.privacydev.net/streams/${videoId}`,
+        `https://pipedapi.kavin.rocks/streams/${videoId}`,
+        `https://vid.priv.au/api/v1/videos/${videoId}`
+      ];
 
-    window.onYouTubeIframeAPIReady = function() {
-      yt = new YT.Player('yt-player-instance', {
-        height: '200',
-        width: '100%',
-        playerVars: {
-          'playsinline': 1,
-          'controls': 0,
-          'disablekb': 1,
-          'fs': 0,
-          'rel': 0,
-          'origin': window.location.origin
-        },
-        events: {
-          'onReady': (e) => {
-            isYtReady = true;
-            try {
-              e.target.setVolume(Math.round(currentVolumeLevel * 100));
-            } catch (err) {}
-            if (queuedVideoId) {
-              yt.loadVideoById(queuedVideoId);
-              queuedVideoId = null;
-              startProgressTimer();
+      for (const url of publicGateways) {
+        try {
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 3500);
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(tid);
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.audioStreams && data.audioStreams.length > 0) {
+              data.audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+              return data.audioStreams[0].url;
             }
-          },
-          'onStateChange': (e) => {
-            if (e.data === YT.PlayerState.PLAYING) {
-              setPlayState(true);
-            } else if (e.data === YT.PlayerState.PAUSED) {
-              setPlayState(false);
-            } else if (e.data === YT.PlayerState.ENDED) {
-              nextTrack();
+            if (data.adaptiveFormats) {
+              const audios = data.adaptiveFormats.filter(f => (f.type || '').includes('audio'));
+              if (audios.length > 0) {
+                audios.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+                return audios[0].url;
+              }
             }
           }
+        } catch (e) {
+          continue;
         }
-      });
-    };
-
-    function startProgressTimer() {
-      if (progressTimer) clearInterval(progressTimer);
-      progressTimer = setInterval(() => {
-        if (!isYtReady || !yt || typeof yt.getCurrentTime !== 'function') return;
-        
-        const cur = yt.getCurrentTime() || 0;
-        const dur = yt.getDuration() || 0;
-        if (dur > 0) {
-          const percent = (cur / dur) * 100;
-          updateProgressVisual(percent);
-
-          const formattedCur = formatTime(cur);
-          const formattedDur = formatTime(dur);
-
-          document.getElementById('currentTime').innerText = formattedCur;
-          document.getElementById('duration').innerText = formattedDur;
-
-          if (fsCurrentTime) fsCurrentTime.innerText = formattedCur;
-          if (fsDuration) fsDuration.innerText = formattedDur;
-
-          if (kCurrentTime) kCurrentTime.innerText = formattedCur;
-          if (kDuration) kDuration.innerText = formattedDur;
-
-          if (mKCurrentTime) mKCurrentTime.innerText = formattedCur;
-          if (mKDuration) mKDuration.innerText = formattedDur;
-
-          updateKaraokeHighlight(cur);
-
-          if (Math.floor(cur) % 5 === 0) {
-            queueDatabaseSync();
-          }
-        }
-      }, 350);
+      }
+      return `https://invidious.jing.rocks/latest_version?id=${videoId}&itag=140`;
     }
 
     function showToast(text) {
@@ -2304,11 +2249,11 @@
       if (currentVolumeLevel > 0) {
         lastVolume = currentVolumeLevel;
         currentVolumeLevel = 0;
-        if (isYtReady && yt) yt.setVolume(0);
+        audioPlayer.volume = 0;
         updateVolumeVisual(0);
       } else {
         currentVolumeLevel = lastVolume || 1.0;
-        if (isYtReady && yt) yt.setVolume(Math.round(currentVolumeLevel * 100));
+        audioPlayer.volume = currentVolumeLevel;
         updateVolumeVisual(currentVolumeLevel);
       }
       queueDatabaseSync();
@@ -2446,13 +2391,12 @@
       if (!currentUser) return;
       clearTimeout(syncDebounce);
       syncDebounce = setTimeout(async () => {
-        const curTime = (isYtReady && yt && typeof yt.getCurrentTime === 'function') ? yt.getCurrentTime() : 0;
         const payload = {
           email: currentUser.email,
           playlists: userPlaylists,
           state: {
             currentTrack: currentQueue[currentIndex] || null,
-            currentTime: curTime || 0,
+            currentTime: audioPlayer.currentTime || 0,
             volume: currentVolumeLevel,
             eqBands: currentEqBands,
             activePreset: currentPreset
@@ -2895,7 +2839,7 @@
 
       if (state.volume !== undefined) {
         currentVolumeLevel = state.volume;
-        if (isYtReady && yt) yt.setVolume(Math.round(currentVolumeLevel * 100));
+        audioPlayer.volume = currentVolumeLevel;
         updateVolumeVisual(state.volume);
       } else {
         updateVolumeVisual(1.0);
@@ -2922,14 +2866,8 @@
       if (state.currentTrack) {
         currentQueue = [state.currentTrack];
         currentIndex = 0;
-        const track = state.currentTrack;
-
-        syncTrackToUI(track);
-        loadLyricsForCurrentTrack(track);
-
-        if (isYtReady && yt) {
-          yt.cueVideoById(track.id, state.currentTime || 0);
-        }
+        syncTrackToUI(state.currentTrack);
+        loadLyricsForCurrentTrack(state.currentTrack);
       }
     }
 
@@ -3005,8 +2943,8 @@
       updateDockHeartState();
     }
 
-    // СИНХРОННЫЙ ВЫЗОВ В МОМЕНТ НАЖАТИЯ ПОЛЬЗОВАТЕЛЯ ДЛЯ РАЗБЛОКИРОВКИ ANDROID / MOBILE CHROME
-    function playIndex(index) {
+    // Воспроизведение через нативный HTML5 тег <audio>
+    async function playIndex(index) {
       if (index < 0 || index >= currentQueue.length) return;
       currentIndex = index;
       const track = currentQueue[index];
@@ -3016,49 +2954,36 @@
 
       updateProgressVisual(0);
       document.getElementById('currentTime').innerText = '0:00';
-      if (fsCurrentTime) fsCurrentTime.innerText = '0:00';
-      if (kCurrentTime) kCurrentTime.innerText = '0:00';
-      if (mKCurrentTime) mKCurrentTime.innerText = '0:00';
 
-      if (isYtReady && yt && typeof yt.loadVideoById === 'function') {
-        try {
-          yt.unMute();
-          yt.setVolume(Math.round(currentVolumeLevel * 100));
-        } catch (e) {}
+      // Разблокировка нативного аудио-контекста по тапу
+      audioPlayer.pause();
+      showToast(`Загрузка аудио...`);
 
-        yt.loadVideoById(track.id);
-        yt.playVideo();
-        startProgressTimer();
-      } else {
-        queuedVideoId = track.id;
-        const poll = setInterval(() => {
-          if (isYtReady && yt && typeof yt.loadVideoById === 'function') {
-            clearInterval(poll);
-            try {
-              yt.unMute();
-              yt.setVolume(Math.round(currentVolumeLevel * 100));
-            } catch (e) {}
-            yt.loadVideoById(track.id);
-            yt.playVideo();
-            startProgressTimer();
-          }
-        }, 100);
+      try {
+        const streamUrl = await resolveDirectAudioUrl(track.id);
+        audioPlayer.src = streamUrl;
+        audioPlayer.volume = currentVolumeLevel;
+        
+        await audioPlayer.play();
+        setPlayState(true);
+      } catch (err) {
+        console.error("Audio playback error:", err);
+        showToast("Ошибка воспроизведения аудио");
+        setPlayState(false);
       }
 
-      setPlayState(true);
       queueDatabaseSync();
     }
 
     function togglePlay() {
-      if (!isYtReady || !yt || currentIndex < 0) return;
+      if (currentIndex < 0 || !audioPlayer.src) return;
 
-      const state = yt.getPlayerState();
-      if (state === YT.PlayerState.PLAYING) {
-        yt.pauseVideo();
-        setPlayState(false);
-      } else {
-        yt.playVideo();
+      if (audioPlayer.paused) {
+        audioPlayer.play();
         setPlayState(true);
+      } else {
+        audioPlayer.pause();
+        setPlayState(false);
       }
     }
 
@@ -3099,12 +3024,45 @@
       if (currentIndex - 1 >= 0) playIndex(currentIndex - 1);
     }
 
-    function seekToPercentage(val) {
-      if (!isYtReady || !yt || typeof yt.getDuration !== 'function') return;
-      const dur = yt.getDuration() || 0;
+    // Синхронизация прогресса через события HTML5 Audio
+    audioPlayer.ontimeupdate = () => {
+      const cur = audioPlayer.currentTime || 0;
+      const dur = audioPlayer.duration || 0;
       if (dur > 0) {
-        const targetSec = (val / 100) * dur;
-        yt.seekTo(targetSec, true);
+        const percent = (cur / dur) * 100;
+        updateProgressVisual(percent);
+
+        const formattedCur = formatTime(cur);
+        const formattedDur = formatTime(dur);
+
+        document.getElementById('currentTime').innerText = formattedCur;
+        document.getElementById('duration').innerText = formattedDur;
+
+        if (fsCurrentTime) fsCurrentTime.innerText = formattedCur;
+        if (fsDuration) fsDuration.innerText = formattedDur;
+
+        if (kCurrentTime) kCurrentTime.innerText = formattedCur;
+        if (kDuration) kDuration.innerText = formattedDur;
+
+        if (mKCurrentTime) mKCurrentTime.innerText = formattedCur;
+        if (mKDuration) mKDuration.innerText = formattedDur;
+
+        updateKaraokeHighlight(cur);
+
+        if (Math.floor(cur) % 5 === 0) {
+          queueDatabaseSync();
+        }
+      }
+    };
+
+    audioPlayer.onended = () => {
+      nextTrack();
+    };
+
+    function seekToPercentage(val) {
+      const dur = audioPlayer.duration || 0;
+      if (dur > 0) {
+        audioPlayer.currentTime = (val / 100) * dur;
         updateProgressVisual(val);
         queueDatabaseSync();
       }
@@ -3118,7 +3076,7 @@
     volumeSlider.oninput = (e) => { 
       const val = parseFloat(e.target.value);
       currentVolumeLevel = val;
-      if (isYtReady && yt) yt.setVolume(Math.round(val * 100));
+      audioPlayer.volume = val;
       updateVolumeVisual(val);
       queueDatabaseSync();
     };

@@ -19,7 +19,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://www.youtube.com/iframe_api"></script>
 
   <style>
     :root {
@@ -2081,7 +2080,6 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- СКРЫТЫЙ ОФИЦИАЛЬНЫЙ ДВИЖОК ВОСПРОИЗВЕДЕНИЯ YOUTUBE -->
   <div style="position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
     <div id="yt-player-instance"></div>
   </div>
@@ -2913,7 +2911,7 @@
       }
     }
 
-    function applyUserState(user) {
+    fn applyUserState(user) {
       const container = document.getElementById('authContainer');
       container.innerHTML = `
         <div class="auth-btn" style="padding: 4px 12px 4px 6px;" onclick="switchTab('profile')">
@@ -3057,7 +3055,7 @@
       const mKIconMarkup = isPlaying
         ? '<rect x="6" y="5" width="3" height="14"/><rect x="13" y="5" width="3" height="14"/>'
         : '<polygon points="7 5 17 12 7 19 7 5"/>';
-      if (mKPlayIcon) mKPlayIcon.innerHTML = mKIconMarkup;
+      if (mKPlayIcon) mKPlayIcon.innerHTML = mKPlayIcon.innerHTML = mKIconMarkup;
     }
 
     function nextTrack() {
@@ -3099,7 +3097,7 @@
     }
 
     window.onload = () => {
-      executeSearch(DEFAULT_CATALOG_QUERY);
+      executeSearch(DEFAULT_CATALOG_URL || DEFAULT_CATALOG_QUERY);
       checkExistingAuth();
       setTimeout(initGoogleAuth, 600);
       updateVolumeVisual(currentVolumeLevel);

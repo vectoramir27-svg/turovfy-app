@@ -10,7 +10,6 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
-import yt_dlp
 from ytmusicapi import YTMusic
 
 app = FastAPI(title="TurovFy Audio Core")
@@ -73,7 +72,7 @@ async def resolve_audio_url(video_id: str) -> str:
         "https://invidious.jing.rocks"
     ]
     
-    async with httpx.AsyncClient(timeout=4.0) as client:
+    async with httpx.AsyncClient(timeout=6.0) as client:
         for base_url in invidious_instances:
             try:
                 res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
@@ -89,28 +88,6 @@ async def resolve_audio_url(video_id: str) -> str:
                             return target_url
             except Exception:
                 continue
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'socket_timeout': 8,
-    }
-
-    def extract():
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            return info.get('url')
-
-    try:
-        loop = asyncio.get_event_loop()
-        target_url = await loop.run_in_executor(None, extract)
-        if target_url:
-            STREAM_CACHE[video_id] = target_url
-            return target_url
-    except Exception as e:
-        print(f"yt-dlp fallback error: {e}")
 
     fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
     STREAM_CACHE[video_id] = fallback_url

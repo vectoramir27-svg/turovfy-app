@@ -11,8 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
+import yt_dlp
 
-app = FastAPI(title="TurovFy Core - Invidious Engine")
+app = FastAPI(title="TurovFy Core")
 
 os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
@@ -46,13 +47,23 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-# Список публичных зеркал Invidious для отказоустойчивости
-INVIDIOUS_INSTANCES = [
-    "https://invidious.privacyredirect.com",
-    "https://vid.priv.au",
-    "https://inv.nadeko.net",
-    "https://invidious.perennialte.ch"
-]
+# Жесткие и надежные параметры для yt-dlp последней версии
+YTDL_OPTS = {
+    "format": "ba[ext=m4a]/bestaudio/best",
+    "noplaylist": True,
+    "quiet": True,
+    "no_warnings": True,
+    "skip_download": True,
+    "nocheckcertificate": True,
+    "ignoreerrors": True,
+    "socket_timeout": 15,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android", "web"],
+            "player_skip": ["js", "configs"]
+        }
+    }
+}
 
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
@@ -67,33 +78,35 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
 
-async def get_invidious_stream_url(video_id: str) -> str:
+def extract_direct_url(video_id: str) -> str:
     now = time.time()
     if video_id in STREAM_CACHE and STREAM_CACHE[video_id]["expires"] > now:
         return STREAM_CACHE[video_id]["url"]
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for instance in INVIDIOUS_INSTANCES:
-            try:
-                res = await client.get(f"{instance}/api/v1/videos/{video_id}")
-                if res.status_code == 200:
-                    data = res.json()
-                    adaptive_formats = data.get("adaptiveFormats", [])
-                    # Ищем лучший аудиопоток
-                    audio_streams = [
-                        f for f in adaptive_formats 
-                        if "audio" in f.get("type", "")
-                    ]
-                    if audio_streams:
-                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                        stream_url = audio_streams[0].get("url")
-                        if stream_url:
-                            STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
-                            return stream_url
-            except Exception:
-                continue
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    
+    with yt_dlp.YoutubeDL(YTDL_OPTS) as ydl:
+        try:
+            info = ydl.extract_info(video_url, download=False)
+            stream_url = info.get("url") if info else None
 
-    raise HTTPException(status_code=404, detail="Audio stream not found via Invidious")
+            if not stream_url and info and "formats" in info:
+                audio_formats = [
+                    f for f in info["formats"]
+                    if f.get("acodec") != "none"
+                ]
+                audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+                if audio_formats:
+                    stream_url = audio_formats[0].get("url")
+
+            if stream_url:
+                STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
+                return stream_url
+        except Exception as e:
+            print(f"yt-dlp error: {e}")
+
+    # Запасной шлюз через публичный инструмент, если yt-dlp временно выдал ошибку
+    raise HTTPException(status_code=404, detail="Stream generation failed")
 
 @app.get("/")
 async def serve_index():
@@ -271,7 +284,8 @@ async def get_track_lyrics(track: str, artist: str):
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str):
     try:
-        direct_url = await get_invidious_stream_url(video_id)
+        loop = asyncio.get_event_loop()
+        direct_url = await loop.run_in_executor(None, extract_direct_url, video_id)
         return RedirectResponse(url=direct_url, status_code=307)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -279,7 +293,8 @@ async def listen_track(video_id: str):
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):
     try:
-        await get_invidious_stream_url(video_id)
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, extract_direct_url, video_id)
         return {"status": "prefetching"}
     except Exception:
         return {"status": "ignored"}

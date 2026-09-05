@@ -4,10 +4,9 @@ import sqlite3
 import json
 import re
 import asyncio
-import urllib.request
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
@@ -57,10 +56,10 @@ YTDL_OPTS = {
     "nocheckcertificate": True,
     "ignoreerrors": True,
     "no_check_formats": True,
-    "socket_timeout": 6,
+    "socket_timeout": 8,
     "extractor_args": {
         "youtube": {
-            "player_client": ["android", "ios"],
+            "player_client": ["android", "ios", "web"],
             "player_skip": ["js", "configs", "webpage"]
         }
     }
@@ -277,48 +276,15 @@ async def get_track_lyrics(track: str, artist: str):
     except Exception:
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
 
-# Мгновенная буферизованная передача аудио без ReadTimeout и без блокировки CORS
+# Молниеносный 307 редирект на прямой поток Google CDN
 @app.get("/api/listen/{video_id}")
-async def listen_track(video_id: str, request: Request):
+async def listen_track(video_id: str):
     try:
         loop = asyncio.get_event_loop()
         direct_url = await loop.run_in_executor(None, extract_direct_url, video_id)
+        return RedirectResponse(url=direct_url, status_code=307)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-    range_header = request.headers.get("range", "bytes=0-")
-    req = urllib.request.Request(direct_url)
-    req.add_header("Range", range_header)
-    req.add_header("User-Agent", "Mozilla/5.0 (Android; Mobile)")
-
-    try:
-        remote_file = urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CDN connection error: {e}")
-
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Type": remote_file.headers.get("Content-Type", "audio/mp4"),
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-    }
-    if "Content-Range" in remote_file.headers:
-        headers["Content-Range"] = remote_file.headers["Content-Range"]
-    if "Content-Length" in remote_file.headers:
-        headers["Content-Length"] = remote_file.headers["Content-Length"]
-
-    def audio_generator():
-        try:
-            while True:
-                chunk = remote_file.read(64 * 1024)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            remote_file.close()
-
-    status_code = 206 if range_header else 200
-    return StreamingResponse(audio_generator(), status_code=status_code, headers=headers)
 
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):

@@ -5,7 +5,7 @@ import re
 import asyncio
 from fastapi import FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
@@ -71,13 +71,12 @@ async def resolve_audio_url(video_id: str) -> str:
         f"https://vid.priv.au/api/v1/videos/{video_id}"
     ]
 
-    async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
         for url in gateways:
             try:
                 res = await client.get(url)
                 if res.status_code == 200:
                     data = res.json()
-                    # Piped format
                     if "audioStreams" in data and data["audioStreams"]:
                         streams = data["audioStreams"]
                         streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
@@ -85,7 +84,6 @@ async def resolve_audio_url(video_id: str) -> str:
                         if target:
                             STREAM_CACHE[video_id] = target
                             return target
-                    # Invidious format
                     if "adaptiveFormats" in data:
                         audio_streams = [f for f in data["adaptiveFormats"] if "audio" in f.get("type", "")]
                         if audio_streams:
@@ -97,7 +95,6 @@ async def resolve_audio_url(video_id: str) -> str:
             except Exception:
                 continue
 
-    # Прямой публичный fallback-прокси
     fallback = f"https://invidious.jing.rocks/latest_version?id={video_id}&itag=140"
     STREAM_CACHE[video_id] = fallback
     return fallback
@@ -283,13 +280,45 @@ async def get_track_lyrics(track: str, artist: str):
 
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str, request: Request):
-    try:
-        target_url = await resolve_audio_url(video_id)
-        # Отдаём прямой 307-редирект браузеру телефона.
-        # Браузер скачивает поток напрямую с CDN, снимая нагрузку и обходя баны дата-центра Render.
-        return RedirectResponse(url=target_url, status_code=307)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    target_url = await resolve_audio_url(video_id)
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    range_header = request.headers.get("range")
+    if range_header:
+        headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
+    req = client.build_request("GET", target_url, headers=headers)
+    r = await client.send(req, stream=True)
+
+    if r.status_code not in (200, 206):
+        await r.aclose()
+        await client.aclose()
+        raise HTTPException(status_code=502, detail="Upstream media unavailable")
+
+    async def stream():
+        try:
+            async for chunk in r.aiter_bytes(chunk_size=65536):
+                yield chunk
+        finally:
+            await r.aclose()
+            await client.aclose()
+
+    resp_headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": r.headers.get("content-type", "audio/mp4"),
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS"
+    }
+    if "content-length" in r.headers:
+        resp_headers["Content-Length"] = r.headers["content-length"]
+    if "content-range" in r.headers:
+        resp_headers["Content-Range"] = r.headers["content-range"]
+
+    return StreamingResponse(stream(), status_code=r.status_code, headers=resp_headers)
 
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):

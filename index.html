@@ -2062,7 +2062,7 @@
         <div class="k-line active">Загрузка текста...</div>
       </div>
 
-      <!-- Мобильный плеер снизу экрана текста (красивый и закругленный) -->
+      <!-- Мобильный плеер снизу экрана текста -->
       <div class="mobile-lyrics-player-bar">
         <div class="m-lyrics-track-row">
           <div class="m-lyrics-meta">
@@ -2122,6 +2122,9 @@
   <audio id="audioElement"></audio>
 
   <script>
+    // БАЗОВЫЙ АДРЕС ТВОЕГО БЭКЕНДА НА RENDER
+    const API_BASE = "https://turovfy-app.onrender.com";
+
     const GOOGLE_CLIENT_ID = "626469255866-clqnscvcv71s9baj7rs32u49ekmmertk.apps.googleusercontent.com";
     const DEFAULT_CATALOG_QUERY = 'Phonk 2026';
 
@@ -2295,7 +2298,7 @@
       karaokeLinesContainer.innerHTML = `<div class="k-line active">Загрузка текста...</div>`;
 
       try {
-        const res = await fetch(`/api/lyrics?track=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
+        const res = await fetch(`${API_BASE}/api/lyrics?track=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
         const data = await res.json();
         parseLyrics(data.lyrics, data.type);
       } catch (e) {
@@ -2402,7 +2405,7 @@
           }
         };
         try {
-          await fetch('/api/user/sync', {
+          await fetch(`${API_BASE}/api/user/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -2488,7 +2491,7 @@
       showToast(`Загрузка артиста ${cleanName}...`);
 
       try {
-        const res = await fetch(`/api/artist?query=${encodeURIComponent(cleanName)}`);
+        const res = await fetch(`${API_BASE}/api/artist?query=${encodeURIComponent(cleanName)}`);
         const data = await res.json();
         
         artistNameTitle.innerText = data.name;
@@ -2818,7 +2821,7 @@
       closeAuthModal();
 
       try {
-        const res = await fetch('/api/user/auth', {
+        const res = await fetch(`${API_BASE}/api/user/auth`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(currentUser)
@@ -2849,7 +2852,7 @@
         applyUserState(currentUser);
 
         try {
-          const res = await fetch('/api/user/auth', {
+          const res = await fetch(`${API_BASE}/api/user/auth`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(currentUser)
@@ -2899,7 +2902,7 @@
         syncTrackToUI(track);
         loadLyricsForCurrentTrack(track);
 
-        audio.src = `/api/listen/${track.id}`;
+        audio.src = `${API_BASE}/api/listen/${track.id}`;
 
         const onInitialLoad = () => {
           if (state.currentTime) {
@@ -2951,7 +2954,7 @@
 
     async function executeSearch(query) {
       try {
-        const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API_BASE}/api/search?query=${encodeURIComponent(query)}`);
         const data = await res.json();
         currentQueue = data.results;
         renderGrid(currentQueue);
@@ -3006,14 +3009,14 @@
       if (kCurrentTime) kCurrentTime.innerText = '0:00';
       if (mKCurrentTime) mKCurrentTime.innerText = '0:00';
 
-      audio.src = `/api/listen/${track.id}`;
+      audio.src = `${API_BASE}/api/listen/${track.id}`;
       audio.play();
       setPlayState(true);
 
       queueDatabaseSync();
 
       if (currentIndex + 1 < currentQueue.length) {
-        fetch(`/api/prefetch/${currentQueue[currentIndex + 1].id}`);
+        fetch(`${API_BASE}/api/prefetch/${currentQueue[currentIndex + 1].id}`);
       }
     }
 
@@ -3140,7 +3143,7 @@
       queueDatabaseSync();
     };
     
-    audio.onended = () => nextTrack();
+    audio.onended = () => nextThreadNextTrack = () => nextTrack();
 
     function formatTime(secs) {
       const min = Math.floor(secs / 60) || 0;

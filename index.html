@@ -19,6 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
 
   <style>
     :root {
@@ -1726,7 +1727,7 @@
       <div class="island-sep"></div>
 
       <button class="island-special-btn" onclick="toggleKaraoke()" title="Текст песни">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
       </button>
     </nav>
   </div>
@@ -2080,14 +2081,15 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- НАТИВНЫЙ HTML5 АУДИОПЛЕЕР ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ И ПК -->
-  <audio id="audioElement" preload="auto"></audio>
+  <!-- ОФИЦИАЛЬНЫЙ СЕРВИС YOUTUBE БЕЗ ПОТЕРИ ВИДИМОСТИ ДЛЯ ANDROID -->
+  <div style="position: fixed; bottom: 0; right: 0; width: 220px; height: 220px; z-index: -999; pointer-events: none; overflow: hidden;">
+    <div id="yt-player-instance"></div>
+  </div>
 
   <script>
     const GOOGLE_CLIENT_ID = "626469255866-clqnscvcv71s9baj7rs32u49ekmmertk.apps.googleusercontent.com";
     const DEFAULT_CATALOG_QUERY = 'Phonk 2026';
 
-    const audio = document.getElementById('audioElement');
     const searchInput = document.getElementById('searchInput');
     const trackGrid = document.getElementById('trackGrid');
     const playBtn = document.getElementById('playBtn');
@@ -2157,6 +2159,81 @@
     let isKaraokeOpen = false;
     let selectedTrackForPlaylist = null;
 
+    let yt = null;
+    let isYtReady = false;
+    let progressTimer = null;
+    let queuedVideoId = null;
+
+    window.onYouTubeIframeAPIReady = function() {
+      yt = new YT.Player('yt-player-instance', {
+        height: '200',
+        width: '200',
+        playerVars: {
+          'playsinline': 1,
+          'controls': 0,
+          'disablekb': 1,
+          'fs': 0,
+          'rel': 0,
+          'origin': window.location.origin
+        },
+        events: {
+          'onReady': () => {
+            isYtReady = true;
+            yt.setVolume(Math.round(currentVolumeLevel * 100));
+            if (queuedVideoId) {
+              yt.loadVideoById(queuedVideoId);
+              queuedVideoId = null;
+              startProgressTimer();
+            }
+          },
+          'onStateChange': (e) => {
+            if (e.data === YT.PlayerState.PLAYING) {
+              setPlayState(true);
+            } else if (e.data === YT.PlayerState.PAUSED) {
+              setPlayState(false);
+            } else if (e.data === YT.PlayerState.ENDED) {
+              nextTrack();
+            }
+          }
+        }
+      });
+    };
+
+    function startProgressTimer() {
+      if (progressTimer) clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        if (!isYtReady || !yt || typeof yt.getCurrentTime !== 'function') return;
+        
+        const cur = yt.getCurrentTime() || 0;
+        const dur = yt.getDuration() || 0;
+        if (dur > 0) {
+          const percent = (cur / dur) * 100;
+          updateProgressVisual(percent);
+
+          const formattedCur = formatTime(cur);
+          const formattedDur = formatTime(dur);
+
+          document.getElementById('currentTime').innerText = formattedCur;
+          document.getElementById('duration').innerText = formattedDur;
+
+          if (fsCurrentTime) fsCurrentTime.innerText = formattedCur;
+          if (fsDuration) fsDuration.innerText = formattedDur;
+
+          if (kCurrentTime) kCurrentTime.innerText = formattedCur;
+          if (kDuration) kDuration.innerText = formattedDur;
+
+          if (mKCurrentTime) mKCurrentTime.innerText = formattedCur;
+          if (mKDuration) mKDuration.innerText = formattedDur;
+
+          updateKaraokeHighlight(cur);
+
+          if (Math.floor(cur) % 5 === 0) {
+            queueDatabaseSync();
+          }
+        }
+      }, 350);
+    }
+
     function showToast(text) {
       clearTimeout(toastTimeout);
       toastMsg.innerText = text;
@@ -2213,11 +2290,11 @@
       if (currentVolumeLevel > 0) {
         lastVolume = currentVolumeLevel;
         currentVolumeLevel = 0;
-        audio.volume = 0;
+        if (isYtReady && yt) yt.setVolume(0);
         updateVolumeVisual(0);
       } else {
         currentVolumeLevel = lastVolume || 1.0;
-        audio.volume = currentVolumeLevel;
+        if (isYtReady && yt) yt.setVolume(Math.round(currentVolumeLevel * 100));
         updateVolumeVisual(currentVolumeLevel);
       }
       queueDatabaseSync();
@@ -2355,12 +2432,13 @@
       if (!currentUser) return;
       clearTimeout(syncDebounce);
       syncDebounce = setTimeout(async () => {
+        const curTime = (isYtReady && yt && typeof yt.getCurrentTime === 'function') ? yt.getCurrentTime() : 0;
         const payload = {
           email: currentUser.email,
           playlists: userPlaylists,
           state: {
             currentTrack: currentQueue[currentIndex] || null,
-            currentTime: audio.currentTime || 0,
+            currentTime: curTime || 0,
             volume: currentVolumeLevel,
             eqBands: currentEqBands,
             activePreset: currentPreset
@@ -2803,7 +2881,7 @@
 
       if (state.volume !== undefined) {
         currentVolumeLevel = state.volume;
-        audio.volume = currentVolumeLevel;
+        if (isYtReady && yt) yt.setVolume(Math.round(currentVolumeLevel * 100));
         updateVolumeVisual(state.volume);
       } else {
         updateVolumeVisual(1.0);
@@ -2835,9 +2913,8 @@
         syncTrackToUI(track);
         loadLyricsForCurrentTrack(track);
 
-        audio.src = `/api/listen/${track.id}`;
-        if (state.currentTime) {
-          audio.currentTime = state.currentTime;
+        if (isYtReady && yt) {
+          yt.cueVideoById(track.id, state.currentTime || 0);
         }
       }
     }
@@ -2928,30 +3005,30 @@
       if (kCurrentTime) kCurrentTime.innerText = '0:00';
       if (mKCurrentTime) mKCurrentTime.innerText = '0:00';
 
-      audio.src = `/api/listen/${track.id}`;
-      audio.play().then(() => {
-        setPlayState(true);
-      }).catch(err => {
-        console.error("Audio play error:", err);
-        showToast("Ошибка воспроизведения потока");
-      });
+      if (isYtReady && yt) {
+        yt.loadVideoById(track.id);
+        yt.playVideo();
+        startProgressTimer();
+      } else {
+        queuedVideoId = track.id;
+      }
 
+      setPlayState(true);
       queueDatabaseSync();
     }
 
     function togglePlay() {
-      if (!audio.src) return;
+      if (!isYtReady || !yt || currentIndex < 0) return;
 
-      if (audio.paused) {
-        audio.play().then(() => setPlayState(true)).catch(e => console.error(e));
-      } else {
-        audio.pause();
+      const state = yt.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        yt.pauseVideo();
         setPlayState(false);
+      } else {
+        yt.playVideo();
+        setPlayState(true);
       }
     }
-
-    audio.onplay = () => setPlayState(true);
-    audio.onpause = () => setPlayState(false);
 
     function setPlayState(isPlaying) {
       const isMobile = window.innerWidth <= 768;
@@ -2990,72 +3067,29 @@
       if (currentIndex - 1 >= 0) playIndex(currentIndex - 1);
     }
 
-    audio.ontimeupdate = () => {
-      if (!audio.duration) return;
-      const percent = (audio.currentTime / audio.duration) * 100;
-      updateProgressVisual(percent);
-
-      const formattedCur = formatTime(audio.currentTime);
-      const formattedDur = formatTime(audio.duration);
-
-      document.getElementById('currentTime').innerText = formattedCur;
-      document.getElementById('duration').innerText = formattedDur;
-
-      if (fsCurrentTime) fsCurrentTime.innerText = formattedCur;
-      if (fsDuration) fsDuration.innerText = formattedDur;
-
-      if (kCurrentTime) kCurrentTime.innerText = formattedCur;
-      if (kDuration) kDuration.innerText = formattedDur;
-
-      if (mKCurrentTime) mKCurrentTime.innerText = formattedCur;
-      if (mKDuration) mKDuration.innerText = formattedDur;
-
-      updateKaraokeHighlight(audio.currentTime);
-      
-      if (Math.floor(audio.currentTime) % 5 === 0) {
+    function seekToPercentage(val) {
+      if (!isYtReady || !yt || typeof yt.getDuration !== 'function') return;
+      const dur = yt.getDuration() || 0;
+      if (dur > 0) {
+        const targetSec = (val / 100) * dur;
+        yt.seekTo(targetSec, true);
+        updateProgressVisual(val);
         queueDatabaseSync();
       }
-    };
-
-    progressBar.oninput = () => {
-      if (!audio.duration) return;
-      audio.currentTime = (progressBar.value / 100) * audio.duration;
-      queueDatabaseSync();
-    };
-
-    if (fsProgressBar) {
-      fsProgressBar.oninput = () => {
-        if (!audio.duration) return;
-        audio.currentTime = (fsProgressBar.value / 100) * audio.duration;
-        queueDatabaseSync();
-      };
     }
 
-    if (kProgressBar) {
-      kProgressBar.oninput = () => {
-        if (!audio.duration) return;
-        audio.currentTime = (kProgressBar.value / 100) * audio.duration;
-        queueDatabaseSync();
-      };
-    }
-
-    if (mKProgressBar) {
-      mKProgressBar.oninput = () => {
-        if (!audio.duration) return;
-        audio.currentTime = (mKProgressBar.value / 100) * audio.duration;
-        queueDatabaseSync();
-      };
-    }
+    progressBar.oninput = () => seekToPercentage(progressBar.value);
+    if (fsProgressBar) fsProgressBar.oninput = () => seekToPercentage(fsProgressBar.value);
+    if (kProgressBar) kProgressBar.oninput = () => seekToPercentage(kProgressBar.value);
+    if (mKProgressBar) mKProgressBar.oninput = () => seekToPercentage(mKProgressBar.value);
 
     volumeSlider.oninput = (e) => { 
       const val = parseFloat(e.target.value);
       currentVolumeLevel = val;
-      audio.volume = val;
+      if (isYtReady && yt) yt.setVolume(Math.round(val * 100));
       updateVolumeVisual(val);
       queueDatabaseSync();
     };
-
-    audio.onended = () => nextTrack();
 
     function formatTime(secs) {
       const min = Math.floor(secs / 60) || 0;

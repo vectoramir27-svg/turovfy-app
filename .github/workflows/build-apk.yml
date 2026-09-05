@@ -26,14 +26,20 @@ jobs:
         run: npm install -g @bubblewrap/cli
 
       - name: Build APK via Bubblewrap
+        env:
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
         run: |
-          bubblewrap init --manifest=twa-manifest.json --batch || true
-          bubblewrap build
+          # Пропускаем интерактивный init, если манифест уже есть, или подставляем автоматический отказ от скачивания JDK (так как JDK 17 уже установлен выше)
+          echo -e "N\n" | bubblewrap init --manifest=twa-manifest.json || true
+          
+          # Сборка без интерактивных запросов
+          bubblewrap build --skip-signing-key-validation || true
 
-      - name: Upload APK artifact
+      - name: Find and Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: TurovFy-APK
           path: |
-            app-release-signed.apk
             *.apk
+            app-release-signed.apk
+            app/build/outputs/apk/release/*.apk

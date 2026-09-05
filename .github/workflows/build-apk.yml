@@ -25,17 +25,13 @@ jobs:
       - name: Install Bubblewrap CLI
         run: npm install -g @bubblewrap/cli
 
-      - name: Initialize and Build TWA
+      - name: Build APK via Bubblewrap
+        env:
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
         run: |
-          # Инициализация с принудительной генерацией структуры
-          bubblewrap update --manifest=twa-manifest.json || bubblewrap init --manifest=twa-manifest.json --batch
-          
-          # Сборка проекта
+          # Автоматически отправляем 'n' на вопрос установки JDK и 'y' на подтверждения
+          yes n | bubblewrap init --manifest=twa-manifest.json || true
           bubblewrap build
-
-      - name: Check files and find APK
-        run: |
-          find . -name "*.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -43,5 +39,5 @@ jobs:
           name: TurovFy-APK
           path: |
             *.apk
-            app/build/outputs/apk/release/*.apk
             app-release-signed.apk
+            app/build/outputs/apk/release/*.apk

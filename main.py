@@ -3,15 +3,16 @@ import sqlite3
 import json
 import re
 import asyncio
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
+import yt_dlp
 from ytmusicapi import YTMusic
 
-app = FastAPI(title="TurovFy Audio Proxy Core")
+app = FastAPI(title="TurovFy Audio Core")
 
 os.makedirs("assets", exist_ok=True)
 if os.path.exists("assets"):
@@ -47,13 +48,6 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-AUDIO_ENDPOINTS = [
-    "https://inv.nadeko.net",
-    "https://invidious.perennialte.ch",
-    "https://vid.priv.au",
-    "https://invidious.jing.rocks"
-]
-
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
         return f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
@@ -71,23 +65,29 @@ async def resolve_audio_url(video_id: str) -> str:
     if video_id in STREAM_CACHE:
         return STREAM_CACHE[video_id]
 
-    async with httpx.AsyncClient(timeout=6.0) as client:
-        for base_url in AUDIO_ENDPOINTS:
-            try:
-                res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
-                if res.status_code == 200:
-                    data = res.json()
-                    formats = data.get("adaptiveFormats", [])
-                    audio_streams = [f for f in formats if "audio" in f.get("type", "")]
-                    if audio_streams:
-                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                        target_url = audio_streams[0].get("url")
-                        if target_url:
-                            STREAM_CACHE[video_id] = target_url
-                            return target_url
-            except Exception:
-                continue
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'socket_timeout': 10,
+    }
 
+    def extract():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            return info.get('url')
+
+    try:
+        loop = asyncio.get_event_loop()
+        target_url = await loop.run_in_executor(None, extract)
+        if target_url:
+            STREAM_CACHE[video_id] = target_url
+            return target_url
+    except Exception as e:
+        print(f"yt-dlp extraction error for {video_id}: {e}")
+
+    # Запасной шлюз, если yt-dlp заблокирован на хостинге
     fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
     STREAM_CACHE[video_id] = fallback_url
     return fallback_url
@@ -167,6 +167,8 @@ async def search_tracks(query: str):
         tracks = []
         for item in results:
             vid = item.get("videoId")
+            if not vid:
+                continue
             thumbnails = item.get("thumbnails", [])
             raw_cover = thumbnails[-1]["url"] if thumbnails else None
             cover = enhance_cover_quality(raw_cover, vid)
@@ -212,6 +214,8 @@ async def get_artist_page(query: str):
                 continue
 
             vid = s.get("videoId")
+            if not vid:
+                continue
             thumbs = s.get("thumbnails", [])
             raw_cover = thumbs[-1]["url"] if thumbs else None
             cover = enhance_cover_quality(raw_cover, vid)
@@ -268,12 +272,20 @@ async def get_track_lyrics(track: str, artist: str):
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
 
 @app.get("/api/listen/{video_id}")
-async def listen_track(video_id: str):
+async def listen_track(video_id: str, request: Request):
     target_url = await resolve_audio_url(video_id)
     
-    client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
-    req = client.build_request("GET", target_url)
-    resp = await client.send(req, stream=True)
+    range_header = request.headers.get("range", None)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    if range_header:
+        headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
+    try:
+        req = client.build_request("GET", target_url, headers=headers)
+        resp = await client.send(req, stream=True)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Stream upstream error: {e}")
 
     async def stream_generator():
         try:
@@ -283,19 +295,21 @@ async def listen_track(video_id: str):
             await resp.aclose()
             await client.aclose()
 
-    headers = {
+    response_headers = {
         "Accept-Ranges": "bytes",
         "Content-Type": resp.headers.get("content-type", "audio/mp4"),
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "*"
     }
+    if "content-range" in resp.headers:
+        response_headers["Content-Range"] = resp.headers["content-range"]
     if "content-length" in resp.headers:
-        headers["Content-Length"] = resp.headers["content-length"]
+        response_headers["Content-Length"] = resp.headers["content-length"]
 
-    return StreamingResponse(stream_generator(), status_code=resp.status_code, headers=headers)
+    return StreamingResponse(stream_generator(), status_code=resp.status_code, headers=response_headers)
 
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):
-    await resolve_audio_url(video_id)
+    asyncio.create_task(resolve_audio_url(video_id))
     return {"status": "ok"}

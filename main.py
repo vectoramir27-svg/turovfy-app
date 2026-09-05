@@ -11,9 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
-import yt_dlp
 
-app = FastAPI(title="TurovFy Production Core")
+app = FastAPI(title="TurovFy Cloud Core - Piped Engine")
 
 os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
@@ -47,22 +46,13 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-YTDL_OPTS = {
-    "format": "bestaudio/best",
-    "noplaylist": True,
-    "quiet": True,
-    "no_warnings": True,
-    "skip_download": True,
-    "nocheckcertificate": True,
-    "ignoreerrors": True,
-    "socket_timeout": 10,
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["web", "mweb", "ios"],
-            "player_skip": ["js", "configs"]
-        }
-    }
-}
+# Официальные и проверенные публичные инстансы Piped API
+PIPED_INSTANCES = [
+    "https://pipedapi.kavin.rocks",
+    "https://api.piped.privacy.com.de",
+    "https://piped-api.garudalinux.org",
+    "https://pipedapi.drgns.space"
+]
 
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
@@ -77,28 +67,29 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
 
-def extract_direct_url(video_id: str) -> str:
+async def get_piped_stream_url(video_id: str) -> str:
     now = time.time()
     if video_id in STREAM_CACHE and STREAM_CACHE[video_id]["expires"] > now:
         return STREAM_CACHE[video_id]["url"]
 
-    video_url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    with yt_dlp.YoutubeDL(YTDL_OPTS) as ydl:
-        info = ydl.extract_info(video_url, download=False)
-        stream_url = info.get("url") if info else None
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        for instance in PIPED_INSTANCES:
+            try:
+                res = await client.get(f"{instance}/streams/{video_id}")
+                if res.status_code == 200:
+                    data = res.json()
+                    audio_streams = data.get("audioStreams", [])
+                    if audio_streams:
+                        # Сортируем по битрейту, чтобы взять самое лучшее качество
+                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                        stream_url = audio_streams[0].get("url")
+                        if stream_url:
+                            STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
+                            return stream_url
+            except Exception:
+                continue
 
-        if not stream_url and info and "formats" in info:
-            audio_formats = [f for f in info["formats"] if f.get("acodec") != "none"]
-            audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
-            if audio_formats:
-                stream_url = audio_formats[0].get("url")
-
-        if not stream_url:
-            raise HTTPException(status_code=404, detail="Stream extraction failed")
-
-        STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 7200}
-        return stream_url
+    raise HTTPException(status_code=404, detail="Stream not found via Piped instances")
 
 @app.get("/")
 async def serve_index():
@@ -276,8 +267,7 @@ async def get_track_lyrics(track: str, artist: str):
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str):
     try:
-        loop = asyncio.get_event_loop()
-        direct_url = await loop.run_in_executor(None, extract_direct_url, video_id)
+        direct_url = await get_piped_stream_url(video_id)
         return RedirectResponse(url=direct_url, status_code=307)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -285,8 +275,7 @@ async def listen_track(video_id: str):
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):
     try:
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, extract_direct_url, video_id)
+        await get_piped_stream_url(video_id)
         return {"status": "prefetching"}
     except Exception:
         return {"status": "ignored"}

@@ -47,7 +47,6 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-# Единственные рабочие параметры с эмуляцией мобильного клиента YouTube Music
 YTDL_OPTS = {
     "format": "bestaudio/best",
     "noplaylist": True,
@@ -89,7 +88,7 @@ def extract_direct_url(video_id: str) -> str:
         stream_url = info.get("url") if info else None
 
         if not stream_url and info and "formats" in info:
-            audio_formats = [f for f in info["formats"] if f.get("acodec"] != "none"]
+            audio_formats = [f for f in info["formats"] if f.get("acodec") != "none"]
             audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
             if audio_formats:
                 stream_url = audio_formats[0].get("url")

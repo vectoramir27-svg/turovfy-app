@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
 
-app = FastAPI(title="TurovFy Cloud Core - Piped Engine")
+app = FastAPI(title="TurovFy Direct Core")
 
 os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
@@ -46,14 +46,6 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-# Официальные и проверенные публичные инстансы Piped API
-PIPED_INSTANCES = [
-    "https://pipedapi.kavin.rocks",
-    "https://api.piped.privacy.com.de",
-    "https://piped-api.garudalinux.org",
-    "https://pipedapi.drgns.space"
-]
-
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
         return f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
@@ -67,29 +59,54 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
 
-async def get_piped_stream_url(video_id: str) -> str:
+async def get_stream_from_cobalt(video_id: str) -> str:
     now = time.time()
     if video_id in STREAM_CACHE and STREAM_CACHE[video_id]["expires"] > now:
         return STREAM_CACHE[video_id]["url"]
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        for instance in PIPED_INSTANCES:
-            try:
-                res = await client.get(f"{instance}/streams/{video_id}")
-                if res.status_code == 200:
-                    data = res.json()
-                    audio_streams = data.get("audioStreams", [])
-                    if audio_streams:
-                        # Сортируем по битрейту, чтобы взять самое лучшее качество
-                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                        stream_url = audio_streams[0].get("url")
-                        if stream_url:
-                            STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
-                            return stream_url
-            except Exception:
-                continue
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    
+    # Используем публичный незаблокированный API-интерфейс для получения медиапотоков
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            res = await client.post(
+                "https://api.cobalt.tools/api/json",
+                json={
+                    "url": video_url,
+                    "isAudioOnly": True,
+                    "aFormat": "mp3"
+                },
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "Mozilla/5.0"
+                }
+            )
+            if res.status_code == 200:
+                data = res.json()
+                stream_url = data.get("url")
+                if stream_url:
+                    STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 7200}
+                    return stream_url
+        except Exception:
+            pass
 
-    raise HTTPException(status_code=404, detail="Stream not found via Piped instances")
+    # Запасной вариант через публичный Invidious шлюз
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        try:
+            r = await client.get(f"https://inv.nadeko.net/api/v1/videos/{video_id}")
+            if r.status_code == 200:
+                d = r.json()
+                formats = [f for f in d.get("adaptiveFormats", []) if "audio" in f.get("type", "")]
+                if formats:
+                    formats.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                    s_url = formats[0].get("url")
+                    if s_url:
+                        STREAM_CACHE[video_id] = {"url": s_url, "expires": now + 7200}
+                        return s_url
+        except Exception:
+            pass
+
+    raise HTTPException(status_code=404, detail="Stream resolution failed completely")
 
 @app.get("/")
 async def serve_index():
@@ -267,7 +284,7 @@ async def get_track_lyrics(track: str, artist: str):
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str):
     try:
-        direct_url = await get_piped_stream_url(video_id)
+        direct_url = await get_stream_from_cobalt(video_id)
         return RedirectResponse(url=direct_url, status_code=307)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -275,7 +292,7 @@ async def listen_track(video_id: str):
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):
     try:
-        await get_piped_stream_url(video_id)
+        await get_stream_from_cobalt(video_id)
         return {"status": "prefetching"}
     except Exception:
         return {"status": "ignored"}

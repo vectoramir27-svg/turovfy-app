@@ -5,13 +5,13 @@ import re
 import asyncio
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
 
-app = FastAPI(title="TurovFy Core")
+app = FastAPI(title="TurovFy Core Engine")
 
 os.makedirs("assets", exist_ok=True)
 if os.path.exists("assets"):
@@ -44,6 +44,15 @@ def init_db():
 init_db()
 
 ytmusic = YTMusic()
+STREAM_CACHE = {}
+
+# Рабочие инстансы Invidious для прямой отдачи аудиопотока
+AUDIO_ENDPOINTS = [
+    "https://inv.nadeko.net",
+    "https://invidious.perennialte.ch",
+    "https://vid.priv.au",
+    "https://invidious.jing.rocks"
+]
 
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
@@ -57,6 +66,34 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     elif "hqdefault.jpg" in raw_url:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
+
+async def resolve_audio_url(video_id: str) -> str:
+    if video_id in STREAM_CACHE:
+        return STREAM_CACHE[video_id]
+
+    async with httpx.AsyncClient(timeout=6.0) as client:
+        for base_url in AUDIO_ENDPOINTS:
+            try:
+                # Запрашиваем информацию о форматах
+                res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
+                if res.status_code == 200:
+                    data = res.json()
+                    formats = data.get("adaptiveFormats", [])
+                    audio_streams = [f for f in formats if "audio" in f.get("type", "")]
+                    if audio_streams:
+                        # Берем поток с наивысшим битрейтом
+                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                        target_url = audio_streams[0].get("url")
+                        if target_url:
+                            STREAM_CACHE[video_id] = target_url
+                            return target_url
+            except Exception:
+                continue
+
+    # Резервный прямой редирект через аудио-прокси инстанса
+    fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
+    STREAM_CACHE[video_id] = fallback_url
+    return fallback_url
 
 @app.get("/")
 async def serve_index():
@@ -129,7 +166,7 @@ async def sync_data(data: SyncPayload):
 async def search_tracks(query: str):
     try:
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, lambda: ytmusic.search(query=query, filter="songs", limit=25))
+        results = await loop.run_in_executor(None, lambda: ytmusic.search(query=query, filter="songs", limit=20))
         tracks = []
         for item in results:
             vid = item.get("videoId")
@@ -232,3 +269,13 @@ async def get_track_lyrics(track: str, artist: str):
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
     except Exception:
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
+
+@app.get("/api/listen/{video_id}")
+async def listen_track(video_id: str):
+    url = await resolve_audio_url(video_id)
+    return RedirectResponse(url=url, status_code=307)
+
+@app.get("/api/prefetch/{video_id}")
+async def prefetch_track(video_id: str):
+    await resolve_audio_url(video_id)
+    return {"status": "ok"}

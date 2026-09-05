@@ -3,16 +3,15 @@ import sqlite3
 import json
 import re
 import asyncio
-from fastapi import FastAPI, HTTPException, Response, Request
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
-import yt_dlp
 from ytmusicapi import YTMusic
 
-app = FastAPI(title="TurovFy Audio Core")
+app = FastAPI(title="TurovFy Core")
 
 os.makedirs("assets", exist_ok=True)
 if os.path.exists("assets"):
@@ -46,7 +45,6 @@ def init_db():
 init_db()
 
 ytmusic = YTMusic()
-STREAM_CACHE = {}
 
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
@@ -60,55 +58,6 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     elif "hqdefault.jpg" in raw_url:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
-
-def extract_direct_url(video_id: str) -> str:
-    # Имитируем клиент Android/iOS — YouTube не выдает ошибку "Sign in to confirm you're not a bot"
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'socket_timeout': 10,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web_creator']
-            }
-        }
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-        return info.get('url')
-
-async def resolve_audio_url(video_id: str) -> str:
-    if video_id in STREAM_CACHE:
-        return STREAM_CACHE[video_id]
-
-    loop = asyncio.get_event_loop()
-    try:
-        url = await loop.run_in_executor(None, lambda: extract_direct_url(video_id))
-        if url:
-            STREAM_CACHE[video_id] = url
-            return url
-    except Exception as e:
-        print(f"Extraction error: {e}")
-
-    # Запасной шлюз через официальный cobalt API
-    try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            res = await client.post(
-                "https://api.cobalt.tools/api/json",
-                headers={"Accept": "application/json", "Content-Type": "application/json"},
-                json={"url": f"https://www.youtube.com/watch?v={video_id}", "isAudioOnly": True}
-            )
-            if res.status_code == 200:
-                target = res.json().get("url")
-                if target:
-                    STREAM_CACHE[video_id] = target
-                    return target
-    except Exception as e:
-        print(f"Cobalt fallback error: {e}")
-
-    raise HTTPException(status_code=502, detail="Audio resolution failed")
 
 @app.get("/")
 async def serve_index():
@@ -288,54 +237,3 @@ async def get_track_lyrics(track: str, artist: str):
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
     except Exception:
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
-
-@app.get("/api/listen/{video_id}")
-async def listen_track(video_id: str, request: Request):
-    target_url = await resolve_audio_url(video_id)
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    range_header = request.headers.get("range")
-    if range_header:
-        headers["Range"] = range_header
-
-    client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
-    try:
-        req = client.build_request("GET", target_url, headers=headers)
-        r = await client.send(req, stream=True)
-    except Exception as e:
-        await client.aclose()
-        raise HTTPException(status_code=502, detail=f"Stream connection failed: {e}")
-
-    if r.status_code not in (200, 206):
-        await r.aclose()
-        await client.aclose()
-        raise HTTPException(status_code=502, detail="Upstream media unavailable")
-
-    async def stream():
-        try:
-            async for chunk in r.aiter_bytes(chunk_size=65536):
-                yield chunk
-        finally:
-            await r.aclose()
-            await client.aclose()
-
-    resp_headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Type": r.headers.get("content-type", "audio/mp4"),
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS"
-    }
-    if "content-length" in r.headers:
-        resp_headers["Content-Length"] = r.headers["content-length"]
-    if "content-range" in r.headers:
-        resp_headers["Content-Range"] = r.headers["content-range"]
-
-    return StreamingResponse(stream(), status_code=r.status_code, headers=resp_headers)
-
-@app.get("/api/prefetch/{video_id}")
-async def prefetch_track(video_id: str):
-    asyncio.create_task(resolve_audio_url(video_id))
-    return {"status": "ok"}

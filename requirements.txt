@@ -1,5 +1,4 @@
 fastapi
 uvicorn
 httpx
-yt-dlp
 ytmusicapi

@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
+import yt_dlp
 from ytmusicapi import YTMusic
 
 app = FastAPI(title="TurovFy Audio Core")
@@ -60,44 +61,54 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
 
+def extract_direct_url(video_id: str) -> str:
+    # Имитируем клиент Android/iOS — YouTube не выдает ошибку "Sign in to confirm you're not a bot"
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'socket_timeout': 10,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web_creator']
+            }
+        }
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+        return info.get('url')
+
 async def resolve_audio_url(video_id: str) -> str:
     if video_id in STREAM_CACHE:
         return STREAM_CACHE[video_id]
 
-    gateways = [
-        f"https://pipedapi.kavin.rocks/streams/{video_id}",
-        f"https://api.piped.privacydev.net/streams/{video_id}",
-        f"https://inv.nadeko.net/api/v1/videos/{video_id}",
-        f"https://vid.priv.au/api/v1/videos/{video_id}"
-    ]
+    loop = asyncio.get_event_loop()
+    try:
+        url = await loop.run_in_executor(None, lambda: extract_direct_url(video_id))
+        if url:
+            STREAM_CACHE[video_id] = url
+            return url
+    except Exception as e:
+        print(f"Extraction error: {e}")
 
-    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-        for url in gateways:
-            try:
-                res = await client.get(url)
-                if res.status_code == 200:
-                    data = res.json()
-                    if "audioStreams" in data and data["audioStreams"]:
-                        streams = data["audioStreams"]
-                        streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                        target = streams[0].get("url")
-                        if target:
-                            STREAM_CACHE[video_id] = target
-                            return target
-                    if "adaptiveFormats" in data:
-                        audio_streams = [f for f in data["adaptiveFormats"] if "audio" in f.get("type", "")]
-                        if audio_streams:
-                            audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                            target = audio_streams[0].get("url")
-                            if target:
-                                STREAM_CACHE[video_id] = target
-                                return target
-            except Exception:
-                continue
+    # Запасной шлюз через официальный cobalt API
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            res = await client.post(
+                "https://api.cobalt.tools/api/json",
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                json={"url": f"https://www.youtube.com/watch?v={video_id}", "isAudioOnly": True}
+            )
+            if res.status_code == 200:
+                target = res.json().get("url")
+                if target:
+                    STREAM_CACHE[video_id] = target
+                    return target
+    except Exception as e:
+        print(f"Cobalt fallback error: {e}")
 
-    fallback = f"https://invidious.jing.rocks/latest_version?id={video_id}&itag=140"
-    STREAM_CACHE[video_id] = fallback
-    return fallback
+    raise HTTPException(status_code=502, detail="Audio resolution failed")
 
 @app.get("/")
 async def serve_index():
@@ -289,9 +300,13 @@ async def listen_track(video_id: str, request: Request):
     if range_header:
         headers["Range"] = range_header
 
-    client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
-    req = client.build_request("GET", target_url, headers=headers)
-    r = await client.send(req, stream=True)
+    client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+    try:
+        req = client.build_request("GET", target_url, headers=headers)
+        r = await client.send(req, stream=True)
+    except Exception as e:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Stream connection failed: {e}")
 
     if r.status_code not in (200, 206):
         await r.aclose()

@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from ytmusicapi import YTMusic
 import httpx
 import urllib.request
 import sqlite3
 import json
+import os
 
 app = FastAPI()
 
@@ -19,7 +20,6 @@ app.add_middleware(
 
 ytmusic = YTMusic()
 
-# Инициализация SQLite базы данных для пользователей и синхронизации
 def init_db():
     conn = sqlite3.connect("turovfy.db")
     cursor = conn.cursor()
@@ -36,6 +36,20 @@ def init_db():
     conn.close()
 
 init_db()
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_index():
+    if os.path.exists("index.html"):
+        with open("index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    return "TurovFy Backend Active"
+
+@app.get("/manifest.json")
+async def serve_manifest():
+    if os.path.exists("manifest.json"):
+        with open("manifest.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"name": "TurovFy"}
 
 @app.get("/api/search")
 async def search_tracks(query: str):
@@ -167,7 +181,6 @@ async def user_sync(request: Request):
 
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str, request: Request):
-    # Прямое извлечение через стабильный fallback на публичные инвидиос шлюзы при сбое yt-dlp
     invidious_instances = [
         "https://vid.priv.au",
         "https://invidious.perennialte.ch",

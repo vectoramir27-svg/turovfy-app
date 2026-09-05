@@ -5,13 +5,13 @@ import re
 import asyncio
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
 
-app = FastAPI(title="TurovFy Core Engine")
+app = FastAPI(title="TurovFy Audio Proxy Core")
 
 os.makedirs("assets", exist_ok=True)
 if os.path.exists("assets"):
@@ -20,6 +20,7 @@ if os.path.exists("assets"):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,7 +47,6 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-# Рабочие инстансы Invidious для прямой отдачи аудиопотока
 AUDIO_ENDPOINTS = [
     "https://inv.nadeko.net",
     "https://invidious.perennialte.ch",
@@ -74,14 +74,12 @@ async def resolve_audio_url(video_id: str) -> str:
     async with httpx.AsyncClient(timeout=6.0) as client:
         for base_url in AUDIO_ENDPOINTS:
             try:
-                # Запрашиваем информацию о форматах
                 res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
                 if res.status_code == 200:
                     data = res.json()
                     formats = data.get("adaptiveFormats", [])
                     audio_streams = [f for f in formats if "audio" in f.get("type", "")]
                     if audio_streams:
-                        # Берем поток с наивысшим битрейтом
                         audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
                         target_url = audio_streams[0].get("url")
                         if target_url:
@@ -90,7 +88,6 @@ async def resolve_audio_url(video_id: str) -> str:
             except Exception:
                 continue
 
-    # Резервный прямой редирект через аудио-прокси инстанса
     fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
     STREAM_CACHE[video_id] = fallback_url
     return fallback_url
@@ -272,8 +269,31 @@ async def get_track_lyrics(track: str, artist: str):
 
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str):
-    url = await resolve_audio_url(video_id)
-    return RedirectResponse(url=url, status_code=307)
+    target_url = await resolve_audio_url(video_id)
+    
+    client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+    req = client.build_request("GET", target_url)
+    resp = await client.send(req, stream=True)
+
+    async def stream_generator():
+        try:
+            async for chunk in resp.aiter_bytes(chunk_size=65536):
+                yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": resp.headers.get("content-type", "audio/mp4"),
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*"
+    }
+    if "content-length" in resp.headers:
+        headers["Content-Length"] = resp.headers["content-length"]
+
+    return StreamingResponse(stream_generator(), status_code=resp.status_code, headers=headers)
 
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):

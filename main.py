@@ -3,7 +3,6 @@ import sqlite3
 import json
 import re
 import asyncio
-import urllib.request
 from fastapi import FastAPI, HTTPException, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -65,27 +64,41 @@ async def resolve_audio_url(video_id: str) -> str:
     if video_id in STREAM_CACHE:
         return STREAM_CACHE[video_id]
 
-    invidious_instances = [
-        "https://vid.priv.au",
-        "https://invidious.perennialte.ch",
-        "https://inv.nadeko.net",
-        "https://invidious.jing.rocks"
+    # Список API для получения аудиопотока
+    piped_and_invidious = [
+        ("piped", "https://pipedapi.kavin.rocks"),
+        ("piped", "https://api.piped.privacydev.net"),
+        ("invidious", "https://inv.nadeko.net"),
+        ("invidious", "https://invidious.perennialte.ch"),
+        ("invidious", "https://vid.priv.au"),
     ]
     
-    async with httpx.AsyncClient(timeout=6.0) as client:
-        for base_url in invidious_instances:
+    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+        for api_type, base_url in piped_and_invidious:
             try:
-                res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
-                if res.status_code == 200:
-                    data = res.json()
-                    formats = data.get("adaptiveFormats", [])
-                    audio_streams = [f for f in formats if "audio" in f.get("type", "")]
-                    if audio_streams:
-                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                        target_url = audio_streams[0].get("url")
-                        if target_url:
-                            STREAM_CACHE[video_id] = target_url
-                            return target_url
+                if api_type == "piped":
+                    res = await client.get(f"{base_url}/streams/{video_id}")
+                    if res.status_code == 200:
+                        data = res.json()
+                        audio_streams = data.get("audioStreams", [])
+                        if audio_streams:
+                            audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                            url = audio_streams[0].get("url")
+                            if url:
+                                STREAM_CACHE[video_id] = url
+                                return url
+                else:
+                    res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
+                    if res.status_code == 200:
+                        data = res.json()
+                        formats = data.get("adaptiveFormats", [])
+                        audio_streams = [f for f in formats if "audio" in f.get("type", "")]
+                        if audio_streams:
+                            audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                            url = audio_streams[0].get("url")
+                            if url:
+                                STREAM_CACHE[video_id] = url
+                                return url
             except Exception:
                 continue
 
@@ -276,39 +289,45 @@ async def get_track_lyrics(track: str, artist: str):
 async def listen_track(video_id: str, request: Request):
     target_url = await resolve_audio_url(video_id)
     
-    range_header = request.headers.get("range", "bytes=0-")
-    req = urllib.request.Request(target_url)
-    req.add_header("Range", range_header)
-    req.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    req_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    range_header = request.headers.get("range")
+    if range_header:
+        req_headers["range"] = range_header
 
+    client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
     try:
-        remote_file = urllib.request.urlopen(req, timeout=12)
+        req = client.build_request("GET", target_url, headers=req_headers)
+        upstream_resp = await client.send(req, stream=True)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"CDN connection error: {e}")
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Upstream fetch failed: {e}")
 
-    headers = {
+    async def stream_generator():
+        try:
+            async for chunk in upstream_resp.aiter_bytes(chunk_size=65536):
+                yield chunk
+        finally:
+            await upstream_resp.aclose()
+            await client.aclose()
+
+    res_headers = {
         "Accept-Ranges": "bytes",
-        "Content-Type": remote_file.headers.get("Content-Type", "audio/mp4"),
+        "Content-Type": upstream_resp.headers.get("content-type", "audio/mp4"),
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "*",
     }
-    if "Content-Range" in remote_file.headers:
-        headers["Content-Range"] = remote_file.headers["Content-Range"]
-    if "Content-Length" in remote_file.headers:
-        headers["Content-Length"] = remote_file.headers["Content-Length"]
+    if "content-range" in upstream_resp.headers:
+        res_headers["Content-Range"] = upstream_resp.headers["content-range"]
+    if "content-length" in upstream_resp.headers:
+        res_headers["Content-Length"] = upstream_resp.headers["content-length"]
 
-    def audio_generator():
-        try:
-            while True:
-                chunk = remote_file.read(64 * 1024)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            remote_file.close()
-
-    status_code = 206 if range_header else 200
-    return StreamingResponse(audio_generator(), status_code=status_code, headers=headers)
+    return StreamingResponse(
+        stream_generator(),
+        status_code=upstream_resp.status_code,
+        headers=res_headers
+    )
 
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):

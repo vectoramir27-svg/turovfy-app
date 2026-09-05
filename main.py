@@ -1,22 +1,21 @@
 import os
-import time
 import sqlite3
 import json
 import re
 import asyncio
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
-import yt_dlp
 
-app = FastAPI(title="TurovFy Ultimate Core")
+app = FastAPI(title="TurovFy Core")
 
 os.makedirs("assets", exist_ok=True)
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+if os.path.exists("assets"):
+    app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,23 +44,6 @@ def init_db():
 init_db()
 
 ytmusic = YTMusic()
-STREAM_CACHE = {}
-
-YTDL_OPTS = {
-    "format": "bestaudio/best",
-    "noplaylist": True,
-    "quiet": True,
-    "no_warnings": True,
-    "skip_download": True,
-    "nocheckcertificate": True,
-    "ignoreerrors": True,
-    "socket_timeout": 12,
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["android_music"],
-        }
-    }
-}
 
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
@@ -76,32 +58,11 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
 
-def extract_direct_url(video_id: str) -> str:
-    now = time.time()
-    if video_id in STREAM_CACHE and STREAM_CACHE[video_id]["expires"] > now:
-        return STREAM_CACHE[video_id]["url"]
-
-    video_url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    with yt_dlp.YoutubeDL(YTDL_OPTS) as ydl:
-        info = ydl.extract_info(video_url, download=False)
-        stream_url = info.get("url") if info else None
-
-        if not stream_url and info and "formats" in info:
-            audio_formats = [f for f in info["formats"] if f.get("acodec") != "none"]
-            audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
-            if audio_formats:
-                stream_url = audio_formats[0].get("url")
-
-        if not stream_url:
-            raise HTTPException(status_code=404, detail="Stream extraction failed")
-
-        STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 7200}
-        return stream_url
-
 @app.get("/")
 async def serve_index():
-    return FileResponse("index.html")
+    if os.path.exists("index.html"):
+        return FileResponse("index.html")
+    return {"status": "TurovFy Backend Active"}
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -168,7 +129,7 @@ async def sync_data(data: SyncPayload):
 async def search_tracks(query: str):
     try:
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, lambda: ytmusic.search(query=query, filter="songs", limit=20))
+        results = await loop.run_in_executor(None, lambda: ytmusic.search(query=query, filter="songs", limit=25))
         tracks = []
         for item in results:
             vid = item.get("videoId")
@@ -271,21 +232,3 @@ async def get_track_lyrics(track: str, artist: str):
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
     except Exception:
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
-
-@app.get("/api/listen/{video_id}")
-async def listen_track(video_id: str):
-    try:
-        loop = asyncio.get_event_loop()
-        direct_url = await loop.run_in_executor(None, extract_direct_url, video_id)
-        return RedirectResponse(url=direct_url, status_code=307)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/prefetch/{video_id}")
-async def prefetch_track(video_id: str):
-    try:
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, extract_direct_url, video_id)
-        return {"status": "prefetching"}
-    except Exception:
-        return {"status": "ignored"}

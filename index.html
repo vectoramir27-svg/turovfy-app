@@ -2081,8 +2081,8 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- СКРЫТЫЙ ПЛЕЕР: ТЕХНИЧЕСКИ АКТИВЕН ДЛЯ МОБИЛЬНЫХ БРАУЗЕРОВ, НО ПОЛНОСТЬЮ НЕВИДИМ -->
-  <div style="position: fixed; bottom: 0; right: 0; width: 200px; height: 200px; opacity: 0.001; z-index: -999; pointer-events: none; overflow: hidden; clip-path: inset(100%);">
+  <!-- СКРЫТЫЙ ПЛЕЕР: 1x1px С Z-INDEX ПОД ФОНОМ (ПОЛНОСТЬЮ НЕВИДИМ, НО НЕ БЛОКИРУЕТСЯ БРАУЗЕРОМ) -->
+  <div style="position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; z-index: -999; pointer-events: none; overflow: hidden;">
     <div id="yt-player-instance"></div>
   </div>
 
@@ -2166,8 +2166,8 @@
 
     window.onYouTubeIframeAPIReady = function() {
       yt = new YT.Player('yt-player-instance', {
-        height: '200',
-        width: '200',
+        height: '1',
+        width: '1',
         playerVars: {
           'playsinline': 1,
           'controls': 0,

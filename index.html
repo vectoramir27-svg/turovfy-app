@@ -2,9 +2,18 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
   <title>TurovFy — Unified Streaming Engine</title>
   
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#050507">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TurovFy">
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="apple-touch-icon" href="/assets/logo.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -53,7 +62,6 @@
       pointer-events: none;
     }
 
-    /* Навбар */
     nav {
       position: sticky;
       top: 0;
@@ -154,7 +162,6 @@
       object-fit: cover;
     }
 
-    /* Вкладки */
     .tab-section {
       display: none;
       animation: tabFadeIn 0.2s ease-out;
@@ -165,7 +172,6 @@
       to { opacity: 1; }
     }
 
-    /* Hero */
     .hero {
       position: relative;
       z-index: 1;
@@ -213,7 +219,6 @@
       margin: 0 auto 36px auto;
     }
 
-    /* Поиск */
     .search-container {
       position: relative;
       z-index: 1;
@@ -256,7 +261,6 @@
       color: #71717a;
     }
 
-    /* Карточки треков */
     .tracks-wrapper {
       position: relative;
       z-index: 1;
@@ -360,6 +364,30 @@
       fill: var(--like);
     }
 
+    .card-more-btn {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      cursor: pointer;
+      z-index: 3;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .card-more-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1);
+    }
+
     .playlist-delete-btn {
       position: absolute;
       top: 18px;
@@ -387,7 +415,6 @@
       transform: scale(1.1);
     }
 
-    /* Страница артиста */
     .artist-page-container {
       max-width: 1100px;
       margin: 30px auto 140px auto;
@@ -472,7 +499,6 @@
       background: #f4f4f5;
     }
 
-    /* Эквалайзер */
     .eq-container {
       max-width: 800px;
       margin: 40px auto 120px auto;
@@ -528,7 +554,6 @@
     .eq-val { font-size: 12px; font-weight: 600; color: white; }
     .eq-label { font-size: 11px; color: var(--text-muted); }
 
-    /* Плейлисты */
     .playlists-container {
       max-width: 1100px;
       margin: 40px auto 120px auto;
@@ -562,7 +587,6 @@
     }
     .create-pl-btn:hover { opacity: 0.9; }
 
-    /* Профиль (Вкладка) */
     .profile-container {
       max-width: 700px;
       margin: 40px auto 140px auto;
@@ -597,7 +621,6 @@
       object-fit: cover;
     }
 
-    /* Док-плеер */
     .dock-player {
       position: fixed;
       bottom: 24px;
@@ -832,7 +855,6 @@
       transform: scale(1.25);
     }
 
-    /* ПОЛНОЭКРАННЫЙ РЕЖИМ ПЛЕЕРА */
     .fullscreen-player {
       position: fixed;
       inset: 0;
@@ -1020,7 +1042,6 @@
       transform: translateY(0);
     }
 
-    /* --- ПОЛНОЭКРАННЫЙ РЕЖИМ ТЕКСТА (КАРАОКЕ) --- */
     .karaoke-overlay {
       position: fixed;
       inset: 0;
@@ -1168,12 +1189,10 @@
       transform: none !important;
     }
 
-    /* Мобильный плеер внизу караоке */
     .mobile-lyrics-player-bar {
       display: none;
     }
 
-    /* Модалка выбора плейлиста */
     .pl-pick-list {
       display: flex;
       flex-direction: column;
@@ -1202,7 +1221,85 @@
       transform: translateY(-1px);
     }
 
-    /* Модалка Google Auth */
+    /* Меню действий трека (Action Sheet) */
+    .action-sheet-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(12px);
+      z-index: 850;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .action-sheet-overlay.active {
+      display: flex;
+    }
+    .action-sheet {
+      background: #141419;
+      border: 1px solid var(--card-border);
+      border-radius: 24px 24px 0 0;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px 20px 36px 20px;
+      animation: sheetUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes sheetUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      margin: 0 auto 18px auto;
+    }
+    .sheet-track-info {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .sheet-track-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sheet-track-artist {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sheet-btn {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .sheet-btn:active {
+      transform: scale(0.98);
+    }
+    .sheet-btn.delete {
+      color: #ff4d6d;
+      background: rgba(255, 77, 109, 0.1);
+      border-color: rgba(255, 77, 109, 0.25);
+    }
+
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -1258,7 +1355,6 @@
       cursor: pointer;
     }
 
-    /* Toast */
     .toast-popup {
       position: fixed;
       bottom: 110px;
@@ -1287,7 +1383,6 @@
       opacity: 1;
     }
 
-    /* --- МОБИЛЬНЫЙ ОСТРОВОК С ЖИДКОЙ АНИМАЦИЕЙ --- */
     .mobile-island-wrapper {
       position: fixed;
       bottom: 20px;
@@ -1392,7 +1487,6 @@
       background: rgba(255, 255, 255, 0.15);
     }
 
-    /* --- МЕДИАЗАПРОСЫ ПОД ТЕЛЕФОНЫ --- */
     @media (max-width: 768px) {
       body {
         padding-bottom: 170px;
@@ -1428,7 +1522,6 @@
         padding: 0 14px;
       }
 
-      /* СЕТКА ТРЕКОВ НА ТЕЛЕФОНЕ ПО 2 В СТРОКУ */
       .tracks-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 12px !important;
@@ -1474,7 +1567,6 @@
         justify-content: center;
       }
 
-      /* СХЛОПНУТЫЙ ДОК-ПЛЕЕР */
       .dock-player {
         bottom: 96px;
         left: 50%;
@@ -1546,7 +1638,6 @@
         height: 18px;
       }
 
-      /* --- КАСТОМНЫЙ МОБИЛЬНЫЙ ПЛЕЕР С ЗАСКРУГЛЕННЫМ БЛОКОМ ПОД ВИДЕО --- */
       .karaoke-overlay {
         padding: 0;
         background: #181512;
@@ -1691,7 +1782,6 @@
 <body>
   <div class="grid-background"></div>
 
-  <!-- Навбар -->
   <nav>
     <div class="logo" onclick="goToHome()">
       <div class="logo-img-wrapper">
@@ -1715,7 +1805,6 @@
     </div>
   </nav>
 
-  <!-- МОБИЛЬНЫЙ ОСТРОВОК НАВИГАЦИИ -->
   <div class="mobile-island-wrapper">
     <nav class="mobile-island-nav">
       <div class="island-tabs-group" id="islandTabsGroup">
@@ -1746,7 +1835,6 @@
     </nav>
   </div>
 
-  <!-- СЕКЦИЯ 1: КАТАЛОГ -->
   <section id="tabCatalog" class="tab-section active">
     <div class="hero">
       <div class="badge"><span></span> TurovFy Core v1.0 • Lossless Pipeline</div>
@@ -1767,7 +1855,6 @@
     </div>
   </section>
 
-  <!-- СЕКЦИЯ 2: СТРАНИЦА АРТИСТА -->
   <section id="tabArtist" class="tab-section">
     <div class="artist-page-container">
       <div class="artist-header-card">
@@ -1804,7 +1891,6 @@
     </div>
   </section>
 
-  <!-- СЕКЦИЯ 3: ПЛЕЙЛИСТЫ -->
   <section id="tabPlaylists" class="tab-section">
     <div class="playlists-container">
       <div class="hero" style="margin: 20px auto;">
@@ -1830,7 +1916,6 @@
     </div>
   </section>
 
-  <!-- СЕКЦИЯ 4: ЭКВАЛАЙЗЕР -->
   <section id="tabEq" class="tab-section">
     <div class="eq-container">
       <div class="eq-header">
@@ -1876,7 +1961,6 @@
     </div>
   </section>
 
-  <!-- СЕКЦИЯ 5: ПРОФИЛЬ -->
   <section id="tabProfile" class="tab-section">
     <div class="profile-container">
       <div class="profile-card">
@@ -1894,7 +1978,6 @@
     </div>
   </section>
 
-  <!-- ДОК-ПЛЕЕР -->
   <div class="dock-player">
     <div class="dock-left">
       <div class="dock-cover-wrap" onclick="openFullscreenPlayer()" title="Развернуть">
@@ -1950,7 +2033,6 @@
     </div>
   </div>
 
-  <!-- ПОЛНОЭКРАННЫЙ РЕЖИМ ПЛЕЕРА -->
   <div class="fullscreen-player" id="fullscreenPlayer">
     <button class="fs-close-btn" onclick="closeFullscreenPlayer()" title="Свернуть (Esc)">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1998,7 +2080,6 @@
     </div>
   </div>
 
-  <!-- ПОЛНОЭКРАННЫЙ РЕЖИМ ТЕКСТА (КАРАОКЕ) -->
   <div class="karaoke-overlay" id="karaokeOverlay">
     <button class="fs-close-btn" onclick="toggleKaraoke()" title="Закрыть текст (Esc)">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -2078,17 +2159,36 @@
     </div>
   </div>
 
-  <!-- Модалка добавления трека в плейлист -->
   <div class="modal-overlay" id="addToPlaylistModal">
     <div class="auth-card">
       <button class="close-modal" onclick="closeAddToPlaylistModal()">✕</button>
-      <h3>Добавить в плейлист</h3>
+      <h3 id="addToPlaylistHeading">Добавить в плейлист</h3>
       <p id="addToPlaylistTrackTitle">Выберите коллекцию</p>
       <div class="pl-pick-list" id="playlistPickList"></div>
     </div>
   </div>
 
-  <!-- Модалка Google Auth -->
+  <!-- Action Sheet (Меню 3 точки) для треков в плейлисте -->
+  <div class="action-sheet-overlay" id="actionSheetOverlay" onclick="closeActionSheet(event)">
+    <div class="action-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <div class="sheet-track-info">
+        <div class="sheet-track-title" id="sheetTrackTitle">Название трека</div>
+        <div class="sheet-track-artist" id="sheetTrackArtist">Исполнитель</div>
+      </div>
+
+      <button class="sheet-btn" onclick="moveTrackFromSheet()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3l4 4-4 4"/><path d="M3 7h18"/><path d="M7 21l-4-4 4-4"/><path d="M21 17H3"/></svg>
+        Переместить в другой плейлист
+      </button>
+
+      <button class="sheet-btn delete" onclick="deleteTrackFromSheet()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Удалить из плейлиста
+      </button>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="authModal">
     <div class="auth-card">
       <button class="close-modal" onclick="closeAuthModal()">✕</button>
@@ -2101,14 +2201,12 @@
     </div>
   </div>
 
-  <!-- Toast -->
   <div class="toast-popup" id="toast">
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- СКРЫТЫЙ КОНТЕЙНЕР НАСТОЯЩЕГО ПЛЕЕРА YOUTUBE -->
   <div style="position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
-    <div id="yt-audio-player-host"></div>
+    <div id="yt-player-instance"></div>
   </div>
 
   <script>
@@ -2126,10 +2224,15 @@
     const addToPlaylistModal = document.getElementById('addToPlaylistModal');
     const playlistPickList = document.getElementById('playlistPickList');
     const addToPlaylistTrackTitle = document.getElementById('addToPlaylistTrackTitle');
+    const addToPlaylistHeading = document.getElementById('addToPlaylistHeading');
     const toast = document.getElementById('toast');
     const toastMsg = document.getElementById('toastMsg');
     const dockHeartBtn = document.getElementById('dockHeartBtn');
     const lyricsBtn = document.getElementById('lyricsBtn');
+
+    const actionSheetOverlay = document.getElementById('actionSheetOverlay');
+    const sheetTrackTitle = document.getElementById('sheetTrackTitle');
+    const sheetTrackArtist = document.getElementById('sheetTrackArtist');
 
     const fullscreenPlayer = document.getElementById('fullscreenPlayer');
     const fsCover = document.getElementById('fsCover');
@@ -2184,13 +2287,68 @@
     let isKaraokeOpen = false;
     let selectedTrackForPlaylist = null;
 
-    /* --- ИНИЦИАЛИЗАЦИЯ ДВИЖКА YOUTUBE IFRAME --- */
-    let ytPlayer = null;
+    let activePlaylistContext = null;
+    let actionSheetTrack = null;
+    let actionSheetTrackIndex = -1;
+
+    /* --- ФОНОВОЕ ВОСПРОИЗВЕДЕНИЕ (BACKGROUND KEEP-ALIVE) --- */
+    let silentAudioCtx = null;
+    function enableBackgroundAudioSession() {
+      if (silentAudioCtx) return;
+      try {
+        silentAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = silentAudioCtx.createOscillator();
+        const gain = silentAudioCtx.createGain();
+        gain.gain.value = 0.001; // Абсолютно неслышимый уровень
+        osc.connect(gain);
+        gain.connect(silentAudioCtx.destination);
+        osc.start();
+      } catch (e) {
+        console.warn("AudioContext unlock ignored", e);
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (isYtReady && yt && typeof yt.getPlayerState === 'function') {
+          if (yt.getPlayerState() === YT.PlayerState.PLAYING) {
+            yt.playVideo();
+          }
+        }
+      }
+    });
+
+    /* --- СИСТЕМНЫЙ ЭКРАН БЛОКИРОВКИ И ШТОРКА (MediaSession API) --- */
+    function setupMediaSession(track) {
+      if (!('mediaSession' in navigator)) return;
+
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.artist,
+        album: 'TurovFy Streaming',
+        artwork: [
+          { src: track.cover || '/assets/logo.png', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => togglePlay());
+      navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+      navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
+      navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime && isYtReady && yt) {
+          yt.seekTo(details.seekTime, true);
+        }
+      });
+    }
+
+    /* --- ИНИЦИАЛИЗАЦИЯ YOUTUBE IFRAME ПЛЕЕРА --- */
+    let yt = null;
     let isYtReady = false;
-    let tickerInterval = null;
+    let progressTimer = null;
 
     window.onYouTubeIframeAPIReady = function() {
-      ytPlayer = new YT.Player('yt-audio-player-host', {
+      yt = new YT.Player('yt-player-instance', {
         height: '1',
         width: '1',
         playerVars: {
@@ -2204,13 +2362,15 @@
         events: {
           'onReady': () => {
             isYtReady = true;
-            ytPlayer.setVolume(Math.round(currentVolumeLevel * 100));
+            yt.setVolume(Math.round(currentVolumeLevel * 100));
           },
           'onStateChange': (e) => {
             if (e.data === YT.PlayerState.PLAYING) {
               setPlayState(true);
+              if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             } else if (e.data === YT.PlayerState.PAUSED) {
               setPlayState(false);
+              if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
             } else if (e.data === YT.PlayerState.ENDED) {
               nextTrack();
             }
@@ -2219,13 +2379,13 @@
       });
     };
 
-    function startProgressTicker() {
-      if (tickerInterval) clearInterval(tickerInterval);
-      tickerInterval = setInterval(() => {
-        if (!isYtReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+    function startProgressTimer() {
+      if (progressTimer) clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        if (!isYtReady || !yt || typeof yt.getCurrentTime !== 'function') return;
         
-        const cur = ytPlayer.getCurrentTime() || 0;
-        const dur = ytPlayer.getDuration() || 0;
+        const cur = yt.getCurrentTime() || 0;
+        const dur = yt.getDuration() || 0;
         if (dur > 0) {
           const percent = (cur / dur) * 100;
           updateProgressVisual(percent);
@@ -2310,11 +2470,11 @@
       if (currentVolumeLevel > 0) {
         lastVolume = currentVolumeLevel;
         currentVolumeLevel = 0;
-        if (isYtReady && ytPlayer) ytPlayer.setVolume(0);
+        if (isYtReady && yt) yt.setVolume(0);
         updateVolumeVisual(0);
       } else {
         currentVolumeLevel = lastVolume || 1.0;
-        if (isYtReady && ytPlayer) ytPlayer.setVolume(Math.round(currentVolumeLevel * 100));
+        if (isYtReady && yt) yt.setVolume(Math.round(currentVolumeLevel * 100));
         updateVolumeVisual(currentVolumeLevel);
       }
       queueDatabaseSync();
@@ -2445,6 +2605,7 @@
         if (fullscreenPlayer.classList.contains('active')) closeFullscreenPlayer();
         if (isKaraokeOpen) toggleKaraoke();
         if (addToPlaylistModal.classList.contains('active')) closeAddToPlaylistModal();
+        if (actionSheetOverlay.classList.contains('active')) closeActionSheet();
       }
     });
 
@@ -2452,7 +2613,7 @@
       if (!currentUser) return;
       clearTimeout(syncDebounce);
       syncDebounce = setTimeout(async () => {
-        const curTime = (isYtReady && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') ? ytPlayer.getCurrentTime() : 0;
+        const curTime = (isYtReady && yt && typeof yt.getCurrentTime === 'function') ? yt.getCurrentTime() : 0;
         const payload = {
           email: currentUser.email,
           playlists: userPlaylists,
@@ -2476,7 +2637,6 @@
       }, 500);
     }
 
-    /* Эквалайзер сохранен для совместимости */
     function setupEqualizer() {}
 
     function changeEqBand(index, gain) {
@@ -2659,13 +2819,14 @@
       });
     }
 
-    function openAddToPlaylist(track, event) {
+    function openAddToPlaylist(track, event, isMoving = false) {
       if (event) event.stopPropagation();
       if (!currentUser) {
         openAuthModal();
         return;
       }
       selectedTrackForPlaylist = track;
+      addToPlaylistHeading.innerText = isMoving ? 'Переместить в...' : 'Добавить в плейлист';
       addToPlaylistTrackTitle.innerText = `${track.title} — ${track.artist}`;
       playlistPickList.innerHTML = '';
 
@@ -2674,14 +2835,21 @@
         playlistPickList.innerHTML = '<div style="color:var(--text-muted); font-size:13px; padding:10px;">Нет созданных плейлистов</div>';
       } else {
         names.forEach(name => {
+          if (isMoving && name === activePlaylistContext) return;
           const item = document.createElement('div');
           item.className = 'pl-pick-item';
           const already = userPlaylists[name].some(t => t.id === track.id);
           item.innerHTML = `
             <span>${name}</span>
-            <span style="font-size:12px; color:${already ? '#10b981' : 'var(--text-muted)'};">${already ? '✓ В плейлисте' : '+ Добавить'}</span>
+            <span style="font-size:12px; color:${already ? '#10b981' : 'var(--text-muted)'};">${already ? '✓ В плейлисте' : '+ Выбрать'}</span>
           `;
-          item.onclick = () => addTrackToCustomPlaylist(name);
+          item.onclick = () => {
+            if (isMoving) {
+              executeMoveTrack(name);
+            } else {
+              addTrackToCustomPlaylist(name);
+            }
+          };
           playlistPickList.appendChild(item);
         });
       }
@@ -2705,6 +2873,69 @@
         queueDatabaseSync();
         closeAddToPlaylistModal();
       }
+    }
+
+    /* --- ЛОГИКА МЕНЮ 3 ТОЧКИ ДЛЯ ПЛЕЙЛИСТОВ --- */
+    function openTrackActionSheet(track, index, playlistName, event) {
+      if (event) event.stopPropagation();
+      actionSheetTrack = track;
+      actionSheetTrackIndex = index;
+      activePlaylistContext = playlistName;
+
+      sheetTrackTitle.innerText = track.title;
+      sheetTrackArtist.innerText = track.artist;
+
+      actionSheetOverlay.classList.add('active');
+    }
+
+    function closeActionSheet(e) {
+      if (e) e.stopPropagation();
+      actionSheetOverlay.classList.remove('active');
+      actionSheetTrack = null;
+      actionSheetTrackIndex = -1;
+    }
+
+    function deleteTrackFromSheet() {
+      if (!actionSheetTrack || !activePlaylistContext || !userPlaylists[activePlaylistContext]) return;
+      
+      userPlaylists[activePlaylistContext].splice(actionSheetTrackIndex, 1);
+      showToast(`Трек удален из "${activePlaylistContext}"`);
+      queueDatabaseSync();
+      closeActionSheet();
+      
+      // Перерисовываем список треков плейлиста
+      openPlaylist(activePlaylistContext, userPlaylists[activePlaylistContext]);
+      updateDockHeartState();
+      updateHeartIcons();
+    }
+
+    function moveTrackFromSheet() {
+      const trackToMove = actionSheetTrack;
+      closeActionSheet();
+      openAddToPlaylist(trackToMove, null, true);
+    }
+
+    function executeMoveTrack(targetPlaylist) {
+      if (!selectedTrackForPlaylist || !activePlaylistContext || !userPlaylists[activePlaylistContext]) return;
+
+      // Удаляем из текущего плейлиста
+      const oldIdx = userPlaylists[activePlaylistContext].findIndex(t => t.id === selectedTrackForPlaylist.id);
+      if (oldIdx > -1) {
+        userPlaylists[activePlaylistContext].splice(oldIdx, 1);
+      }
+
+      // Добавляем в целевой плейлист
+      if (!userPlaylists[targetPlaylist].some(t => t.id === selectedTrackForPlaylist.id)) {
+        userPlaylists[targetPlaylist].unshift(selectedTrackForPlaylist);
+      }
+
+      showToast(`Перемещено в "${targetPlaylist}"`);
+      queueDatabaseSync();
+      closeAddToPlaylistModal();
+
+      openPlaylist(activePlaylistContext, userPlaylists[activePlaylistContext]);
+      updateDockHeartState();
+      updateHeartIcons();
     }
 
     function createPlaylist() {
@@ -2764,10 +2995,7 @@
     }
 
     function openPlaylist(name, tracks) {
-      if (tracks.length === 0) {
-        showToast(`Плейлист "${name}" пока пуст. Нажмите (+) на треках!`);
-        return;
-      }
+      activePlaylistContext = name;
       document.getElementById('playlistsGrid').style.display = 'none';
       const view = document.getElementById('playlistTracksView');
       view.style.display = 'block';
@@ -2775,32 +3003,55 @@
 
       const grid = document.getElementById('playlistTracksGrid');
       grid.innerHTML = '';
+      
+      if (tracks.length === 0) {
+        grid.innerHTML = '<div style="color:var(--text-muted); font-size:14px; grid-column: 1/-1; padding:20px 0;">В плейлисте пока нет треков.</div>';
+        return;
+      }
+
       tracks.forEach((track, index) => {
+        // Создаем карточку со значком "три точки"
         const card = createTrackCard(track, () => {
           currentQueue = tracks;
           playIndex(index);
-        });
+        }, true, index, name);
         grid.appendChild(card);
       });
     }
 
     function closePlaylistView() {
+      activePlaylistContext = null;
       document.getElementById('playlistsGrid').style.display = 'grid';
       document.getElementById('playlistTracksView').style.display = 'none';
     }
 
-    function createTrackCard(track, onPlayClick) {
+    function createTrackCard(track, onPlayClick, isInPlaylist = false, trackIndex = -1, playlistName = '') {
       const card = document.createElement('div');
       card.className = 'track-card';
       const liked = isTrackLiked(track.id);
 
+      let actionButtons = '';
+      if (isInPlaylist) {
+        // В плейлисте показываем аккуратные три точки
+        actionButtons = `
+          <button class="card-more-btn" title="Действия">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+          </button>
+        `;
+      } else {
+        // В каталоге и поиске: кнопки лайк и добавить
+        actionButtons = `
+          <button class="card-action-btn card-plus-btn" data-track-id="${track.id}" title="Добавить в плейлист">
+            <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="card-action-btn card-heart-btn ${liked ? 'liked' : ''}" data-track-id="${track.id}" title="Нравится">
+            <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+        `;
+      }
+
       card.innerHTML = `
-        <button class="card-action-btn card-plus-btn" data-track-id="${track.id}" title="Добавить в плейлист">
-          <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
-        <button class="card-action-btn card-heart-btn ${liked ? 'liked' : ''}" data-track-id="${track.id}" title="Нравится">
-          <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        </button>
+        ${actionButtons}
         <div class="thumb-wrap">
           <img class="thumb-img" referrerpolicy="no-referrer" src="${track.cover || ''}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100%25\' height=\'100%25\' fill=\'%2315161b\'/%3E'">
         </div>
@@ -2808,8 +3059,12 @@
         <div class="card-artist">${track.artist}</div>
       `;
 
-      card.querySelector('.card-heart-btn').onclick = (e) => toggleTrackLike(track, e);
-      card.querySelector('.card-plus-btn').onclick = (e) => openAddToPlaylist(track, e);
+      if (isInPlaylist) {
+        card.querySelector('.card-more-btn').onclick = (e) => openTrackActionSheet(track, trackIndex, playlistName, e);
+      } else {
+        card.querySelector('.card-heart-btn').onclick = (e) => toggleTrackLike(track, e);
+        card.querySelector('.card-plus-btn').onclick = (e) => openAddToPlaylist(track, e);
+      }
       
       const artistEl = card.querySelector('.card-artist');
       artistEl.onclick = (e) => {
@@ -2902,7 +3157,7 @@
 
       if (state.volume !== undefined) {
         currentVolumeLevel = state.volume;
-        if (isYtReady && ytPlayer) ytPlayer.setVolume(Math.round(currentVolumeLevel * 100));
+        if (isYtReady && yt) yt.setVolume(Math.round(currentVolumeLevel * 100));
         updateVolumeVisual(state.volume);
       } else {
         updateVolumeVisual(1.0);
@@ -2934,8 +3189,8 @@
         syncTrackToUI(track);
         loadLyricsForCurrentTrack(track);
 
-        if (isYtReady && ytPlayer) {
-          ytPlayer.cueVideoById(track.id, state.currentTime || 0);
+        if (isYtReady && yt) {
+          yt.cueVideoById(track.id, state.currentTime || 0);
         }
       }
     }
@@ -3010,12 +3265,16 @@
       if (mKCover) mKCover.src = track.cover || '';
 
       updateDockHeartState();
+      setupMediaSession(track);
     }
 
     function playIndex(index) {
       if (index < 0 || index >= currentQueue.length) return;
       currentIndex = index;
       const track = currentQueue[index];
+
+      // Активируем фоновую сессию при первом нажатии пользователя
+      enableBackgroundAudioSession();
 
       syncTrackToUI(track);
       loadLyricsForCurrentTrack(track);
@@ -3026,17 +3285,17 @@
       if (kCurrentTime) kCurrentTime.innerText = '0:00';
       if (mKCurrentTime) mKCurrentTime.innerText = '0:00';
 
-      if (isYtReady && ytPlayer) {
-        ytPlayer.loadVideoById(track.id);
-        ytPlayer.playVideo();
-        startProgressTicker();
+      if (isYtReady && yt) {
+        yt.loadVideoById(track.id);
+        yt.playVideo();
+        startProgressTimer();
       } else {
         const checkReady = setInterval(() => {
-          if (isYtReady && ytPlayer) {
+          if (isYtReady && yt) {
             clearInterval(checkReady);
-            ytPlayer.loadVideoById(track.id);
-            ytPlayer.playVideo();
-            startProgressTicker();
+            yt.loadVideoById(track.id);
+            yt.playVideo();
+            startProgressTimer();
           }
         }, 100);
       }
@@ -3046,14 +3305,15 @@
     }
 
     function togglePlay() {
-      if (!isYtReady || !ytPlayer || currentIndex < 0) return;
+      if (!isYtReady || !yt || currentIndex < 0) return;
+      enableBackgroundAudioSession();
 
-      const state = ytPlayer.getPlayerState();
+      const state = yt.getPlayerState();
       if (state === YT.PlayerState.PLAYING) {
-        ytPlayer.pauseVideo();
+        yt.pauseVideo();
         setPlayState(false);
       } else {
-        ytPlayer.playVideo();
+        yt.playVideo();
         setPlayState(true);
       }
     }
@@ -3096,11 +3356,11 @@
     }
 
     function seekToPercentage(val) {
-      if (!isYtReady || !ytPlayer || typeof ytPlayer.getDuration !== 'function') return;
-      const dur = ytPlayer.getDuration() || 0;
+      if (!isYtReady || !yt || typeof yt.getDuration !== 'function') return;
+      const dur = yt.getDuration() || 0;
       if (dur > 0) {
         const targetSec = (val / 100) * dur;
-        ytPlayer.seekTo(targetSec, true);
+        yt.seekTo(targetSec, true);
         updateProgressVisual(val);
         queueDatabaseSync();
       }
@@ -3114,7 +3374,7 @@
     volumeSlider.oninput = (e) => { 
       const val = parseFloat(e.target.value);
       currentVolumeLevel = val;
-      if (isYtReady && ytPlayer) ytPlayer.setVolume(Math.round(val * 100));
+      if (isYtReady && yt) yt.setVolume(Math.round(val * 100));
       updateVolumeVisual(val);
       queueDatabaseSync();
     };

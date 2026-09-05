@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import httpx
 import yt_dlp
 from ytmusicapi import YTMusic
 
@@ -65,12 +66,36 @@ async def resolve_audio_url(video_id: str) -> str:
     if video_id in STREAM_CACHE:
         return STREAM_CACHE[video_id]
 
+    invidious_instances = [
+        "https://vid.priv.au",
+        "https://invidious.perennialte.ch",
+        "https://inv.nadeko.net",
+        "https://invidious.jing.rocks"
+    ]
+    
+    async with httpx.AsyncClient(timeout=4.0) as client:
+        for base_url in invidious_instances:
+            try:
+                res = await client.get(f"{base_url}/api/v1/videos/{video_id}")
+                if res.status_code == 200:
+                    data = res.json()
+                    formats = data.get("adaptiveFormats", [])
+                    audio_streams = [f for f in formats if "audio" in f.get("type", "")]
+                    if audio_streams:
+                        audio_streams.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
+                        target_url = audio_streams[0].get("url")
+                        if target_url:
+                            STREAM_CACHE[video_id] = target_url
+                            return target_url
+            except Exception:
+                continue
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
-        'socket_timeout': 10,
+        'socket_timeout': 8,
     }
 
     def extract():
@@ -85,7 +110,7 @@ async def resolve_audio_url(video_id: str) -> str:
             STREAM_CACHE[video_id] = target_url
             return target_url
     except Exception as e:
-        print(f"yt-dlp extraction error for {video_id}: {e}")
+        print(f"yt-dlp fallback error: {e}")
 
     fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
     STREAM_CACHE[video_id] = fallback_url

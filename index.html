@@ -2203,8 +2203,8 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- ВИДИМЫЙ ДЛЯ МОБИЛЬНОГО ДВИЖКА ANDROID/CHROME КОНТЕЙНЕР ПЛЕЕРА -->
-  <div style="position: fixed; bottom: 0; right: 0; width: 200px; height: 200px; opacity: 0.001; pointer-events: none; z-index: -1;">
+  <!-- ПОЛНОСТЬЮ АКТИВНЫЙ КОНТЕЙНЕР ПЛЕЕРА НА ЗАДНЕМ СЛОЕ -->
+  <div style="position: fixed; bottom: 10px; right: 10px; width: 64px; height: 64px; z-index: -10; pointer-events: none; overflow: hidden; border-radius: 8px;">
     <div id="yt-player-instance"></div>
   </div>
 
@@ -2342,11 +2342,12 @@
     let yt = null;
     let isYtReady = false;
     let progressTimer = null;
+    let queuedVideoId = null;
 
     window.onYouTubeIframeAPIReady = function() {
       yt = new YT.Player('yt-player-instance', {
-        height: '200',
-        width: '200',
+        height: '64',
+        width: '64',
         playerVars: {
           'playsinline': 1,
           'controls': 0,
@@ -2359,6 +2360,12 @@
           'onReady': () => {
             isYtReady = true;
             yt.setVolume(Math.round(currentVolumeLevel * 100));
+            if (queuedVideoId) {
+              yt.loadVideoById(queuedVideoId);
+              yt.playVideo();
+              queuedVideoId = null;
+              startProgressTimer();
+            }
           },
           'onStateChange': (e) => {
             if (e.data === YT.PlayerState.PLAYING) {
@@ -2373,7 +2380,7 @@
           },
           'onError': (e) => {
             console.error("YouTube Error Code:", e.data);
-            showToast("Ошибка воспроизведения: " + e.data);
+            showToast("Ошибка воспроизведения потока: " + e.data);
           }
         }
       });
@@ -3267,7 +3274,6 @@
       const track = currentQueue[index];
 
       enableBackgroundAudioSession();
-
       syncTrackToUI(track);
       loadLyricsForCurrentTrack(track);
 
@@ -3282,14 +3288,7 @@
         yt.playVideo();
         startProgressTimer();
       } else {
-        const checkReady = setInterval(() => {
-          if (isYtReady && yt) {
-            clearInterval(checkReady);
-            yt.loadVideoById(track.id);
-            yt.playVideo();
-            startProgressTimer();
-          }
-        }, 100);
+        queuedVideoId = track.id;
       }
 
       setPlayState(true);
@@ -3388,7 +3387,6 @@
         if (firstBtn) updateLiquidIndicator(firstBtn);
       }, 200);
 
-      // Снятие блокировки на автовоспроизведение при первом тапе
       const unlockAudio = () => {
         enableBackgroundAudioSession();
         document.removeEventListener('touchstart', unlockAudio);

@@ -1727,7 +1727,7 @@
       <div class="island-sep"></div>
 
       <button class="island-special-btn" onclick="toggleKaraoke()" title="Текст песни">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
       </button>
     </nav>
   </div>
@@ -2081,8 +2081,8 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- ОФИЦИАЛЬНЫЙ СЕРВИС YOUTUBE БЕЗ ПОТЕРИ ВИДИМОСТИ ДЛЯ ANDROID -->
-  <div style="position: fixed; bottom: 0; right: 0; width: 220px; height: 220px; z-index: -999; pointer-events: none; overflow: hidden;">
+  <!-- СКРЫТЫЙ ПЛЕЕР: ТЕХНИЧЕСКИ АКТИВЕН ДЛЯ МОБИЛЬНЫХ БРАУЗЕРОВ, НО ПОЛНОСТЬЮ НЕВИДИМ -->
+  <div style="position: fixed; bottom: 0; right: 0; width: 200px; height: 200px; opacity: 0.001; z-index: -999; pointer-events: none; overflow: hidden; clip-path: inset(100%);">
     <div id="yt-player-instance"></div>
   </div>
 
@@ -2177,9 +2177,11 @@
           'origin': window.location.origin
         },
         events: {
-          'onReady': () => {
+          'onReady': (e) => {
             isYtReady = true;
-            yt.setVolume(Math.round(currentVolumeLevel * 100));
+            try {
+              e.target.setVolume(Math.round(currentVolumeLevel * 100));
+            } catch (err) {}
             if (queuedVideoId) {
               yt.loadVideoById(queuedVideoId);
               queuedVideoId = null;
@@ -3005,12 +3007,29 @@
       if (kCurrentTime) kCurrentTime.innerText = '0:00';
       if (mKCurrentTime) mKCurrentTime.innerText = '0:00';
 
-      if (isYtReady && yt) {
+      if (isYtReady && yt && typeof yt.loadVideoById === 'function') {
+        try {
+          yt.unMute();
+          yt.setVolume(Math.round(currentVolumeLevel * 100));
+        } catch (e) {}
+
         yt.loadVideoById(track.id);
         yt.playVideo();
         startProgressTimer();
       } else {
         queuedVideoId = track.id;
+        const poll = setInterval(() => {
+          if (isYtReady && yt && typeof yt.loadVideoById === 'function') {
+            clearInterval(poll);
+            try {
+              yt.unMute();
+              yt.setVolume(Math.round(currentVolumeLevel * 100));
+            } catch (e) {}
+            yt.loadVideoById(track.id);
+            yt.playVideo();
+            startProgressTimer();
+          }
+        }, 100);
       }
 
       setPlayState(true);

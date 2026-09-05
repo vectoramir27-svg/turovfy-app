@@ -11,8 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from ytmusicapi import YTMusic
+import yt_dlp
 
-app = FastAPI(title="TurovFy Direct Core")
+app = FastAPI(title="TurovFy Ultimate Core")
 
 os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
@@ -46,6 +47,23 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
+# Единственные рабочие параметры с эмуляцией мобильного клиента YouTube Music
+YTDL_OPTS = {
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "quiet": True,
+    "no_warnings": True,
+    "skip_download": True,
+    "nocheckcertificate": True,
+    "ignoreerrors": True,
+    "socket_timeout": 12,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android_music"],
+        }
+    }
+}
+
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
         return f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
@@ -59,54 +77,28 @@ def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
         raw_url = raw_url.replace("hqdefault.jpg", "maxresdefault.jpg")
     return raw_url
 
-async def get_stream_from_cobalt(video_id: str) -> str:
+def extract_direct_url(video_id: str) -> str:
     now = time.time()
     if video_id in STREAM_CACHE and STREAM_CACHE[video_id]["expires"] > now:
         return STREAM_CACHE[video_id]["url"]
 
     video_url = f"https://www.youtube.com/watch?v={video_id}"
     
-    # Используем публичный незаблокированный API-интерфейс для получения медиапотоков
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            res = await client.post(
-                "https://api.cobalt.tools/api/json",
-                json={
-                    "url": video_url,
-                    "isAudioOnly": True,
-                    "aFormat": "mp3"
-                },
-                headers={
-                    "Accept": "application/json",
-                    "User-Agent": "Mozilla/5.0"
-                }
-            )
-            if res.status_code == 200:
-                data = res.json()
-                stream_url = data.get("url")
-                if stream_url:
-                    STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 7200}
-                    return stream_url
-        except Exception:
-            pass
+    with yt_dlp.YoutubeDL(YTDL_OPTS) as ydl:
+        info = ydl.extract_info(video_url, download=False)
+        stream_url = info.get("url") if info else None
 
-    # Запасной вариант через публичный Invidious шлюз
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        try:
-            r = await client.get(f"https://inv.nadeko.net/api/v1/videos/{video_id}")
-            if r.status_code == 200:
-                d = r.json()
-                formats = [f for f in d.get("adaptiveFormats", []) if "audio" in f.get("type", "")]
-                if formats:
-                    formats.sort(key=lambda x: int(x.get("bitrate", 0) or 0), reverse=True)
-                    s_url = formats[0].get("url")
-                    if s_url:
-                        STREAM_CACHE[video_id] = {"url": s_url, "expires": now + 7200}
-                        return s_url
-        except Exception:
-            pass
+        if not stream_url and info and "formats" in info:
+            audio_formats = [f for f in info["formats"] if f.get("acodec"] != "none"]
+            audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+            if audio_formats:
+                stream_url = audio_formats[0].get("url")
 
-    raise HTTPException(status_code=404, detail="Stream resolution failed completely")
+        if not stream_url:
+            raise HTTPException(status_code=404, detail="Stream extraction failed")
+
+        STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 7200}
+        return stream_url
 
 @app.get("/")
 async def serve_index():
@@ -284,7 +276,8 @@ async def get_track_lyrics(track: str, artist: str):
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str):
     try:
-        direct_url = await get_stream_from_cobalt(video_id)
+        loop = asyncio.get_event_loop()
+        direct_url = await loop.run_in_executor(None, extract_direct_url, video_id)
         return RedirectResponse(url=direct_url, status_code=307)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -292,7 +285,8 @@ async def listen_track(video_id: str):
 @app.get("/api/prefetch/{video_id}")
 async def prefetch_track(video_id: str):
     try:
-        await get_stream_from_cobalt(video_id)
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, extract_direct_url, video_id)
         return {"status": "prefetching"}
     except Exception:
         return {"status": "ignored"}

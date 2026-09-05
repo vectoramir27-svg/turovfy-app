@@ -13,7 +13,7 @@ import httpx
 from ytmusicapi import YTMusic
 import yt_dlp
 
-app = FastAPI(title="TurovFy Core")
+app = FastAPI(title="TurovFy Core - Proxy Safe")
 
 os.makedirs("assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
@@ -47,23 +47,14 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
-# Жесткие и надежные параметры для yt-dlp последней версии
-YTDL_OPTS = {
-    "format": "ba[ext=m4a]/bestaudio/best",
-    "noplaylist": True,
-    "quiet": True,
-    "no_warnings": True,
-    "skip_download": True,
-    "nocheckcertificate": True,
-    "ignoreerrors": True,
-    "socket_timeout": 15,
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["android", "web"],
-            "player_skip": ["js", "configs"]
-        }
-    }
-}
+# Список бесплатных публичных HTTP/SOCKS прокси для обхода блокировки дата-центра Render
+PUBLIC_PROXIES = [
+    "", # Сначала пробуем без прокси (вдруг повезет)
+    "socks5://104.248.122.155:1080",
+    "http://167.71.18.234:80",
+    "http://159.203.187.59:3128",
+    "http://64.225.4.155:80"
+]
 
 def enhance_cover_quality(raw_url: str, video_id: str = "") -> str:
     if not raw_url:
@@ -84,29 +75,46 @@ def extract_direct_url(video_id: str) -> str:
         return STREAM_CACHE[video_id]["url"]
 
     video_url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    with yt_dlp.YoutubeDL(YTDL_OPTS) as ydl:
+
+    # Перебираем прокси, пока yt-dlp не отдаст поток обходя капчу
+    for proxy in PUBLIC_PROXIES:
+        opts = {
+            "format": "ba[ext=m4a]/bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "nocheckcertificate": True,
+            "ignoreerrors": True,
+            "socket_timeout": 8,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"],
+                    "player_skip": ["js", "configs"]
+                }
+            }
+        }
+        if proxy:
+            opts["proxy"] = proxy
+
         try:
-            info = ydl.extract_info(video_url, download=False)
-            stream_url = info.get("url") if info else None
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                stream_url = info.get("url") if info else None
 
-            if not stream_url and info and "formats" in info:
-                audio_formats = [
-                    f for f in info["formats"]
-                    if f.get("acodec") != "none"
-                ]
-                audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
-                if audio_formats:
-                    stream_url = audio_formats[0].get("url")
+                if not stream_url and info and "formats" in info:
+                    audio_formats = [f for f in info["formats"] if f.get("acodec") != "none"]
+                    audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+                    if audio_formats:
+                        stream_url = audio_formats[0].get("url")
 
-            if stream_url:
-                STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
-                return stream_url
-        except Exception as e:
-            print(f"yt-dlp error: {e}")
+                if stream_url:
+                    STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
+                    return stream_url
+        except Exception:
+            continue
 
-    # Запасной шлюз через публичный инструмент, если yt-dlp временно выдал ошибку
-    raise HTTPException(status_code=404, detail="Stream generation failed")
+    raise HTTPException(status_code=404, detail="All proxy streams blocked or failed")
 
 @app.get("/")
 async def serve_index():

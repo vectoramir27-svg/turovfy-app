@@ -47,20 +47,20 @@ init_db()
 ytmusic = YTMusic()
 STREAM_CACHE = {}
 
+# Усиленные параметры для yt-dlp, чтобы обходить блокировки хостингов
 YTDL_OPTS = {
-    "format": "ba[ext=m4a]/ba/b",
+    "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
     "skip_download": True,
     "nocheckcertificate": True,
     "ignoreerrors": True,
-    "no_check_formats": True,
-    "socket_timeout": 8,
+    "socket_timeout": 15,
     "extractor_args": {
         "youtube": {
-            "player_client": ["android", "ios", "web"],
-            "player_skip": ["js", "configs", "webpage"]
+            "player_client": ["ios", "android", "web"],
+            "player_skip": ["js", "configs"]
         }
     }
 }
@@ -84,24 +84,33 @@ def extract_direct_url(video_id: str) -> str:
         return STREAM_CACHE[video_id]["url"]
 
     video_url = f"https://www.youtube.com/watch?v={video_id}"
-    with yt_dlp.YoutubeDL(YTDL_OPTS) as ydl:
-        info = ydl.extract_info(video_url, download=False)
-        stream_url = info.get("url") if info else None
+    
+    # Пробуем достать через yt-dlp с разными клиентами
+    for client in [["ios"], ["android"], ["web"]]:
+        current_opts = YTDL_OPTS.copy()
+        current_opts["extractor_args"] = {"youtube": {"player_client": client}}
+        
+        try:
+            with yt_dlp.YoutubeDL(current_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                stream_url = info.get("url") if info else None
 
-        if not stream_url and info and "formats" in info:
-            audio_formats = [
-                f for f in info["formats"]
-                if f.get("acodec") != "none" and f.get("vcodec") == "none"
-            ]
-            audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
-            if audio_formats:
-                stream_url = audio_formats[0].get("url")
+                if not stream_url and info and "formats" in info:
+                    audio_formats = [
+                        f for f in info["formats"]
+                        if f.get("acodec") != "none"
+                    ]
+                    audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+                    if audio_formats:
+                        stream_url = audio_formats[0].get("url")
 
-        if not stream_url:
-            raise HTTPException(status_code=404, detail="Audio stream not found")
+                if stream_url:
+                    STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 10800}
+                    return stream_url
+        except Exception:
+            continue
 
-        STREAM_CACHE[video_id] = {"url": stream_url, "expires": now + 14400}
-        return stream_url
+    raise HTTPException(status_code=404, detail="Audio stream blocked or not found")
 
 @app.get("/")
 async def serve_index():
@@ -276,7 +285,6 @@ async def get_track_lyrics(track: str, artist: str):
     except Exception:
         return {"type": "none", "lyrics": "Текст песни отсутствует."}
 
-# Молниеносный 307 редирект на прямой поток Google CDN
 @app.get("/api/listen/{video_id}")
 async def listen_track(video_id: str):
     try:

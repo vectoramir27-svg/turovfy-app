@@ -1384,6 +1384,18 @@
       background: rgba(255, 255, 255, 0.15);
     }
 
+    /* СКРЫТЫЙ ПОДЛОЖЕЧНЫЙ ПЛЕЕР: АКТИВНЫЙ РАЗМЕР В DOM, НО НЕВИДИМЫЙ */
+    .yt-bg-wrapper {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      height: 200px;
+      z-index: -999;
+      opacity: 0.0001;
+      pointer-events: none;
+    }
+
     @media (max-width: 768px) {
       body {
         padding-bottom: 170px;
@@ -2081,8 +2093,8 @@
     <span id="toastMsg">Уведомление</span>
   </div>
 
-  <!-- СКРЫТЫЙ ПЛЕЕР: 1x1px С Z-INDEX ПОД ФОНОМ (ПОЛНОСТЬЮ НЕВИДИМ, НО НЕ БЛОКИРУЕТСЯ БРАУЗЕРОМ) -->
-  <div style="position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; z-index: -999; pointer-events: none; overflow: hidden;">
+  <!-- КОНТЕЙНЕР ПЛЕЕРА: РАСПОЛОЖЕН В DOM С РЕАЛЬНЫМИ РАЗМЕРАМИ, НО СКРЫТ ПОД САМЫЙ НИЖНИЙ СЛОЙ -->
+  <div class="yt-bg-wrapper">
     <div id="yt-player-instance"></div>
   </div>
 
@@ -2166,8 +2178,8 @@
 
     window.onYouTubeIframeAPIReady = function() {
       yt = new YT.Player('yt-player-instance', {
-        height: '1',
-        width: '1',
+        height: '200',
+        width: '100%',
         playerVars: {
           'playsinline': 1,
           'controls': 0,
@@ -2993,6 +3005,7 @@
       updateDockHeartState();
     }
 
+    // СИНХРОННЫЙ ВЫЗОВ В МОМЕНТ НАЖАТИЯ ПОЛЬЗОВАТЕЛЯ ДЛЯ РАЗБЛОКИРОВКИ ANDROID / MOBILE CHROME
     function playIndex(index) {
       if (index < 0 || index >= currentQueue.length) return;
       currentIndex = index;
